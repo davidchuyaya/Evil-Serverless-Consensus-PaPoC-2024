@@ -1,0 +1,380 @@
+\section{Background}
+\label{sec:background}
+
+Our contributions begin with the program rewriting rules in \Cref{sec:decoupling}.
+Naturally, the correctness of those rules depends on the details of the language we are rewriting, Dedalus.
+Hence in this section we pause to review the syntax and semantics of Dedalus, as well as additional terminology we will use in subsequent discussion.
+
+% To this effect, we provide the necessary background on Dedalus.
+% Our focus here is not on providing the reader with a full description of the language, but instead of providing sufficient context to explain our optimizations.
+% We provide sufficient background on Dedalus to explain our optimizations; refer to \cite{dedalusSemantics} for a formal description of Dedalus semantics.
+Dedalus is a spatiotemporal logic for distributed systems~\cite{dedalus}.
+As we will see in Section~\ref{sec:dedalus}, Dedalus captures specifications for the state, computation and messages of
+a set of distributed \textbf{nodes} over time. Each node (a.k.a.\ machine, thread) has its own explicit ``clock'' that marks out local time sequentially.
+% \kaushik{would it be useful to specify in a sentence what concrete features of Datalog$^\neg$ are removed?}
+% \jmh{Probably too much detail too early, so I revised to ``dialect''
+% to leave it vague for now.
+Dedalus (and hence our work here) assumes a standard asynchronous model 
+in which messages between correct nodes can be arbitrarily delayed and reordered, but must eventually be delivered after an infinite amount of time~\cite{dwork1988consensus}.
+% We make no further assumptions about failures of nodes or message delivery.
+% We assume at most $f$ nodes (for some configurable $f$) will fail by crashing, and messages between all other (correct) nodes will eventually arrive \nc{Rephrase: We assume the standard asynchronous model in which all messages must eventually delivered after an infinite amount of time. Cite DLS88 for it.}
+% We do not consider Byzantine failures or clock synchronization across nodes \nc{Implicit if you assume an asynchronous system. Note that Dedalus with its delay predicate already assumes an asynchronous system so we have to state this assumption earlier}. 
+
+
+Dedalus is a dialect of Datalog$^\neg$, which is itself a SQL-like declarative logic language that supports familiar constructs like joins, selection, and projection, with additional support for recursion, aggregation (akin to \ded{GROUP BY} in SQL), and negation (\ded{NOT IN}). Unlike SQL, Datalog$^\neg$ has set semantics.
+% \jmh{Datalog can get particularly complicated in the context of recursive query processing, but recursion is not a primary feature in the protocols we study.}
+% \jmh{Say that although Dedalus is a theoretical framework, it can run on real machines as seen in the eval.}
+% (as if \ded{DISTINCT} were used in all \ded{SELECT} and aggregate expressions).
+
+
+\subsection{Running example}
+\label{sec:running-example}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.5\linewidth]{assets/running-example.png}
+    \caption{Dataflow diagram for a verifiably-replicated KVS.
+    Edges are labeled with corresponding line numbers; dashed edges represent asynchronous channels. Each gray bounding box represents a node; select nodes' dataflows are presented.}
+    \label{fig:running-example}
+\end{figure}
+
+As a running example, we focus on a verifiably replicated key-value store with hash-conflict detection inspired by~\cite{basil}.
+We use this example to explain the core concepts of Dedalus and to illustrate in \Cref{sec:decoupling,sec:partitioning} how our transformations can be applied. In \Cref{sec:eval} we turn our attention to 
+more complex and realistic examples, including Paxos and 2PC.
+\Cref{fig:running-example} provides a high level diagram of the example; we explain the corresponding Dedalus code (\Cref{lst:storage,lst:leader}) in the next subsection.
+% \jmh{It would be nice to have a version of the current Figure~1 that illustrates this description without all the internal logic
+% (table names) cluttering up the intuition. Ideally it's the same as the current Figure~1 but with less detail, and then we introduce the something like Figure~1 that ``enhances'' it to reflect the Dedalus code.}
+
+% The goal of this small short code snippet is to implement a .
+% \nc{What's the high level goal?}.
+The running example consists of a leader node and multiple storage nodes and allows clients to write to storage nodes, with the ability to detect concurrent writes.
+The leader node cryptographically signs each client message and broadcasts both the message and signature to each storage node.
+Each storage node then stores the message and the hash of the message in a local table if the signature is valid.
+The storage nodes also calculate the number of unique existing messages in the table whose hash collides with the hash of the message.
+The storage nodes then sign the original message and respond to the leader node.
+Upon collecting a response from each storage node, if the number of hash collisions is consistent across responses, the leader creates a certificate of all the responses and replies to the client.
+If any two storage nodes report differing numbers of hash collisions, the leader notifies the client of the inconsistency.
+%\changebars{}{This simple protocol is enough for a client to detect concurrent writes to a replicated hashset.
+We use this simple protocol for illustration, and present more complete protocols---2PC and Paxos---in~\Cref{sec:eval}.
+% \jmh{Think through what number to return here, and be clear here and in the Dedalus whether to include the new item in the count. Also think carefully about how to deal with dup messages that arrive in the same tick vs arriving in different ticks, I think this is handled non-deterministically now (dups removed within tick but not across ticks?)}
+
+\subsection{Datalog$^\neg$}
+\label{sec:datalog}
+We now introduce the necessary Datalog$^\neg$ terminology,
+% The full Dedalus program appears in . 
+copying code snippets from Listings~\ref{lst:leader} and~\ref{lst:storage} to introduce key concepts.
+
+% \jmh{How to read}
+% This rule defines the
+% \ded{collisions} relation via a query that follows the \ded{:-} operator.
+% The query takes the \ded{toStorage} relation, invokes a function \ded{hash} on the first field of that relation (variable \ded{val1}) returning the hash (variable \ded{hashed}); it then joins the results with the relation \ded{hashset} by matching in three ways: (a) the second attribute of \ded{hash} must match the first attribute of \ded{hashset} (variable \ded{hashed}), and (b) the final two attributes of \ded{toStorage} must match those of \ded{hashset} (variables \ded{l} and \ded{t}).
+% Note how variable repetition (e.g. the reuse of \ded{hashed}) is used to compactly define equality predicates, rather than choosing two distinct variables (like \ded{hashed1} and \ded{hashed2}) and explicitly comparing them with an additional predicate (\ded{hashed1 == hashed2}).
+
+A Datalog$^\neg$ \textbf{program} is a set of \textbf{rules} in no particular order. 
+A rule $\varphi$ is like a view definition in SQL, defining a virtual relation via a query over other relations.
+A \textbf{literal} in a rule is either a relation, a negated relation, or a boolean expression.
+A rule consists of a deduction operator \ded{:-} defining a single left-hand-side relation (the \textbf{head} of the rule) via a list of right-hand-side literals (the \textbf{body}).
+
+Consider \Cref{line:storage-collisions} of \Cref{lst:storage}, which computes hash collisions:
+\begin{lstlisting}[language=Dedalus, float=false, firstnumber=3]
+collisions(val2,hashed,l,t) :- toStorage(val1,leaderSig,l,t), hash(val1,hashed), hashset(hashed,val2,l,t)
+\end{lstlisting}
+% Every Dedalus rule defines a relation, expressed as a \textbf{literal}: a relation name
+% and a parenthesized list of variables and constants matching the relation's arity.
+% In our example rule above, the relation being defined is \ded{collisions}, and it has four attributes.% (arity~4).
+% The deduction operator \ded{:-} has a single left-hand-side literal (the \textbf{head} of the rule), and a list of right-hand-side literals (the \textbf{body}).
+In this example, the head literal is \ded{collisions}, and the body literals are \ded{toStorage}, \ded{hash}, and \ded{hashset}.
+Each body literal can be a (possibly negated) \textbf{relation} $r$ consisting of multiple \textbf{attributes} $A$, \emph{or}
+a boolean expression; the head literal must be a relation. For example, \ded{hashset} is a relation with four attributes representing the hash, message value, 
+location, and time in that order.
+% We defer discussions of location and time to \Cref{sec:dedalus}, but note that they form the last two attributes of \emph{every} literal in Dedalus.
+Each attribute must be bound to a constant or \textbf{variable}; attributes in the head literal can also be bound to \textbf{aggregation functions}.
+In the example above, the attribute representing the message value in \ded{hashset} is bound to the variable \ded{val2}.
+Positive literals in the body of the rule are joined together; negative literals are anti-joined (SQL's \ded{NOT IN}). 
+% For instance, the first attribute of \ded{hash} (the value to be hashed) is bound to the variable \ded{val1}.
+Attributes bound to the same variable form an equality predicate---in the rule above, the first attribute of \ded{toStorage} must be equal to the first attribute of \ded{hash} since they are both bound to \ded{val1}; this specifies an equijoin of those two relations. 
+Two positive literals in the same body that share no common variables form a cross-product.
+Multiple rules may have the same head relation; the head relation is defined as the disjunction (SQL \ded{UNION}) of the rule bodies.
+% \jmh{This is a tricky one to start with because \ded{hash} is a function, so people are probably going to be confused. To understand that, they need extra ideas that (a) a function like hash can be modeled as a virtual, infinite relation, and (b) calling a hash function for every tuple in \ded{toStorage} is akin to an ``index loop join'' with \ded{hash}, where we can imagine an index on the first attribute of \ded{hash} that fetches the rest of the attributes that match. All this was ironed out a long time ago in the literature, but muddies up this elementary explanation.}
+% \david{Unfortunately our earlier code (which just joins toStorage and hashset) was incorrect, and rules in the running example involve either a function as a relation, persistence, aggregation, or message sends, so it's hard to find a simpler line as an example.}
+
+Note how library functions like \ded{hash} are simply modeled as infinite relations of the form \ded{(input, output)}.
+% Boolean expressions are similar: \ded{x <op> y} is a virtual relation \ded{op(x, y)} containing all pairs \ded{(x, y)} that satisfy \ded{op}.
+Because these are infinite relations, they can only be used in a rule body if the input variables are bound to another attribute---this corresponds to ``lazily evaluating'' the function only for that attribute's finite set of values.
+% \nc{I'm not sure the reference to lazy evaluation helps understanding}
+For example, the relation \ded{hash} contains the fact \ded{(x, y)} if and only if \ded{hash(x)} equals {y}.
+
+Relations $r$ are populated with \textbf{facts} $f$, which are tuples of values, one for each attribute of $r$.
+We will use the syntax $\pi_A(f)$ to project $f$ to the value of attribute $A$.
+Relations with facts stored prior to execution are traditionally called \emph{extensional} relations, and the set of extensional relations is called the \textbf{EDB}. Derived relations, defined in the heads of rules, are traditionally called \emph{intensional} relations, and the set of them is called the \textbf{IDB}.
+Boolean operators and library functions like \ded{hash} have pre-defined content, hence they are (infinite) EDB relations.
+
+% \nc{Note for a future pass: it may be worth emphasing that receiving messages "generates a new fact" but that sending a message does not. There's an asymmetry inherent in Dedalus that I think is worth explaining for clarity}
+
+% \david{Aggregation and negation.}
+Datalog$^\neg$ also supports negation and aggregations. An example of aggregation is seen in \Cref{lst:storage} \Cref{line:storage-num-collisions}, which counts the number of hash collisions with the \ded{count} aggregation: 
+% \kaushik{Wording makes it seem like I should expect an example of negation here too} \nc{Agree with Kaushik, including a negation argument would be useful}
+% \jmh{The running example has no negation, so I clarified the point here, and there's a bit more negation discussion below.}
+\begin{lstlisting}[language=Dedalus, float=false, firstnumber=4]
+numCollisions(count<val>,hashed,l,t) :- collisions(val,hashed,l,t)
+\end{lstlisting}
+% \jmh{This rule is fishy -- why would the count ever be more than one for a given hashed value? Only answer could be that \ded{l} and \ded{t} matter here, but that seems arbitrary since \ded{l} is fixed per storage node, and \ded{t} is a non-deterministic arrival time.}
+In this syntax, attributes that appear outside of aggregate functions form the \ded{GROUP BY} list; attributes inside the functions are aggregated.
+In order to compute aggregation in any rule $\varphi$, we must first compute the full content of all relations $r$ in the body of $\varphi$.
+% (which themselves may be IDBs defined by other rules!) 
+% to fixpoint.
+% , generating all possible facts for each $r$.
+% In this case, we first compute all possible facts in \ded{collisions}, then count the number of facts in \ded{collisions} with unique values (bound to $val$) for each hash (bound to $hashed$) in \ded{numCollisions}.
+Negation works similarly: if we have a literal \ded{!r(x)} in the body, we can only check that \ded{r} is empty after
+we're sure we have computed the full contents of \ded{r(x)}. 
+% \heidi{I think literal negation isn't used until the appendix so you might be ok move this definition to the start of the appendix instead to save space}
+% \jmh{True, but it feels bad to leave negation with no discussion at all.}
+% Similarly, to compute negation over relation $r$, we first compute $r$ to fixpoint before checking whether the predicate holds.
+% Syntactically, aggregation is evaluated on the enclosed variable ($v$), grouping-by the remaining variables ($h,l,t$).
+We refer the reader to~\cite{aggAndNeg,alice} for further reading on aggregation and negation.
+
+% \todo{Start monotonicity, under rewrites from Joe}
+% In Section~\ref{sec:monotonic-decoupling} we will rely on monotonicity properties of programs \nc{Wrote this in the slack, but this paragraph felt like it appeared out of nowhere, given it singles out one of the optimisations we use. Can we justify why we jump to this in the text?}. 
+% Consider a Datalog$^\neg$ rule $\varphi$ with head relation $R$. Let the content of $R$ over EDB $E$ be denoted $R_E$. We say that $\varphi$ is \emph{monotonic} if, for any two EDBs $E_1 \subseteq E_2$, $R_{E_1} \subseteq R_{E_2}$ -- that is, if the input grows (acquires new tuples), then $R$ either stays the same or also grows. A Datalog$^\neg$ program is monotonic across all its relations (EDB and IDB) iff it consists solely of monotone rules.
+
+% A well-known conservative test for Datalog$^\neg$ monotonicity is to check for the presence of negation or aggregation: any rule without these constructs is monotonic. 
+% \jmh{you may want to skip the rest here.}
+% In addition, some aggregation functions can also be shown to be monotonic, including \ded{max, min, count}, and \ded{sum}~\cite{blooml}. A rule $R$ with only monotone aggregation functions is also monotonic, in a more nuanced sense: if the input grows (acquires new tuples) then each fact in $R$ will either (a) continue to be in $R$, or (b) be replaced by a fact that is the same except for monotonically larger values in the aggregated head attributes. Rules that we cannot verify as monotonic will have to be presumed non-monotonic.
+% \todo{End monotonicity, under rewrites from Joe}
+
+
+\subsection{Dedalus}
+\label{sec:dedalus}
+Dedalus programs are legal Datalog$^\neg$ programs, constrained to adhere to three additional rules on the syntax.
+% As a sublanguage,  Dedalus inherits any results and techniques known for Datalog$^\neg$ in general. 
+
+\textbf{(1) Space and Time in Schema:} All IDB relations must contain two attributes at their far right: location $L$ and time $T$.
+Together, these attributes model \textit{where} and \textit{when} a fact exists in the system.
+% Example
+For example, in the rule on \Cref{line:storage-collisions} discussed above, a \ded{toStorage} message $m$ and signature $sig$ that arrives at time $t$ at a node with location $addr$ is represented as a fact \mbox{\ded{toStorage(}$m, sig, addr ,t$\ded{)}}.
+
+\textbf{(2) Matching Space-Time Variables in Body:} 
+% \nc{The description is good but I'm not sure what uniform space/time means} 
+% \jmh{Hopefully fixed}
+The location and time attributes in \emph{all} body literals must be bound to the same variables $l$ and $t$, respectively. This models the physical property that two facts can be joined only if they exist at the same time and location.
+In \Cref{line:storage-collisions}, a \ded{toStorage} fact that appears on node $l$ at time $t$ can only match with \ded{hashset} facts that are also on $l$ at time $t$. 
+
+% \jmh{side note: functions}
+We model library functions like \ded{hash} as relations
+% \nc{Not sure what you mean by constant} 
+% \jmh{hopefully clear now}
+that are known (replicated) across all nodes $n$ and unchanging across all timesteps $t$. Hence we elide $L$ and $T$ from function and expression literals as a matter of syntax sugar, and assume they can join with other literals at all locations and times.
+
+% \jmh{spatiotemporal head-shift: deductive vs inductive vs async}
+\textbf{(3) Space and Time Constraints in Head:} The location and time variables in the \emph{head} of rules must obey certain syntactic constraints, which 
+% \nc{constrained by what? I know you want to constrast this with free, but reads strangely}, 
+ensure that the ``derived'' locations and times correspond to physical reality. 
+These constraints differ across three types of rules.
+\textbf{Synchronous} (``deductive''~\cite{dedalus}) 
+% \nc{Strange jump here as you went from talking to attributes to instead talking about rules} 
+%\jmh{hopefully addressed now}$
+rules are captured by having the same time variable in the head literal as in the body literals. Having these derivations assigned to the same timestep $t$ is only physically possible on a single node, so the location in the head of a synchronous rule must match the body as well. 
+% In a nutshell, \emph{temporal equality implies spatial equality}. \david{Nice quips maybe for a presentation but I don't think it actually adds to the paper.}
+\textbf{Sequential} (``inductive''~\cite{dedalus}) rules are captured by having the head literal's time be the successor (\ded{t+1}) of the body literals' times \ded{t}.
+Again, sequentiality can only be guaranteed physically on a single node in an asychronous system, so the location of the head in a sequential rule must match the body.
+% In short, \emph{temporal sequentiality implies spatial equality}.
+\textbf{Asynchronous} rules capture message passing between nodes, by having different
+time and location variables in the head than the body. In an asynchronous system, messages are delivered at an arbitrary time in the future.
+% non-deterministic amount of time for networking. \emph{spatial inequality implies temporal non-determinism.}
+We discuss how this is modeled next. 
+
+% \jmh{enforcing async: join with delay}
+% \jmh{There’s a small but bad abuse of notation here. You use \ded{delay(t, t')} in your rules, rather than Dedalus’ \ded{choose(<primary key>, t')}. What that means is that your rules model all facts arriving simultaneously, where Dedalus ensures that each fact can arrive separately. This is especially important in rules that spray facts across multiple destinations — there’s almost no chance they arrive “simultaneously” across all the recipients.}
+In an asynchronous rule $\varphi$,
+the location attribute of the head and body relations in $\varphi$ are bound to different variables; a different location in the head of $\varphi$ indicates the arrival of the fact on a new node.
+% \nc{I would say arrival of the message. It's confusing to say arrival of the fact as you're actually generating a new fact}
+Asynchronous rules are constrained to capture non-deterministic delay by including a body literal for the built-in \ded{delay} relation (a.k.a. \ded{choose}~\cite{dedalus}, \ded{chosen}~\cite{dedalusSemantics}), a non-deterministic function that independently maps each  head fact to an arrival time. 
+The logical formalism of the \ded{delay} function is discussed in~\cite{dedalusSemantics}; for our purposes it is sufficient to know that \ded{delay} is constrained to reflect Lamport's ``happens-before'' relation for each fact. That is, a fact sent at time $t$ on $l$ arrives at time $t'$ on $l'$, where $t < t'$.
+% \kaushik{by 'happens before' it's unclear if you mean logical time or real time?}
+% For our purposes it is sufficient to know that \ded{delay} is constrained to produce timestamps that reflect Lamport's ``happens-before'' relation.
+% The two key issues are (a) non-determinism in a formal logic language translates into many possible ``worlds'' or histories that have to be reasoned about \emph{en masse}, and (b) ensuring happens-before semantics, which is done with some receiver-rewriting that effectively models Lamport clocks.
+% \footnote{The happens-after requirement is achieved in Dedalus by adding explicit rules to every Dedalus program to specify Lamport clocks; these are elided as a matter of syntax sugar~\cite{dedalusSemantics, dedalus}.}.
+% \changebars{}{Refer to~\cite{choose} for further reading on non-determinism in Datalog$^\neg$.} \nc{Hopefully reference at the start of the section is enough}
+We focus on 
+\Cref{lst:storage}, \Cref{line:storage-ACK} from our running example.
+% \shadaj{I can't parse this example, why is there an l at the beginning of fromStorage, are we not using @ syntax?}. \david{Addressed below.}
+\begin{lstlisting}[language=Dedalus, float=false, firstnumber=5]
+fromStorage(l,sig,val,collCnt,l',t') :- toStorage(val,leaderSig,l,t), hash(val,hashed), numCollisions(collCnt,hashed,l,t), sign(val,sig), leader(l'), delay((sig,val,collCnt,l,t,l'),t')
+\end{lstlisting}
+This is an asynchronous rule where a storage node $l$ sends the count of hash collisions for each distinct storage request back to the leader $l'$.
+Note the \ded{l'} and \ded{t'} in the head literal: they are derived from the body literals \ded{leader} (an EDB relation storing the leader address) and the built-in \ded{delay}. 
+Note also how the first attribute of \ded{delay} (the function ``input'') is a tuple of variables that, together, distinguish each individual head fact. This allows \ded{delay} to choose a different \ded{t'} for every head fact~\cite{dedalusSemantics}.
+The \ded{l} in the head literal represents the storage node's address and is used by the leader to count the number of votes; it is unrelated to asynchrony.
+% This requirement is enforced by ensuring that the first argument of \ded{delay} functionally determines all the arguments of the head fact other than \ded{t'}~\cite{dedalusSemantics}. 
+% \heidi{not clear to me why the first attribute of delay includes $l$ twice}
+
+
+
+% \david{Persistence.}
+So far, we have only talked about facts that exist at a point in time $t$.
+State change in Dedalus is modeled through the existence or non-existence of facts \emph{across} time.
+\textbf{Persistence rules} like the one below from \Cref{line:storage-persist} of Listing~\ref{lst:storage} ensure, inductively, that facts in \ded{hashset} that exist at time $t$ exist at time $t+1$.
+Relations with persistence rules---like \ded{hashset}---are \textbf{persisted}.
+\begin{lstlisting}[language=Dedalus, float=false, firstnumber=2]
+hashset(hashed,val,l,t') :- hashset(hashed,val,l,t), t'=t+1
+\end{lstlisting}
+
+\subsection{Further terminology}
+\label{sec:further-terminology}
+
+% \heidi{Compartmentalization no longer used. Maybe change the title to Further Terminology}
+We introduce some additional terminology to capture 
+the rewrites we wish to perform on Dedalus programs.
+
+% In our running example, the client does not interact directly with the storage nodes.
+% Instead, the client delivers messages to the leader node through \ded{toStorage}, in \Cref{lst:leader} \Cref{line:leader-broadcast} below:
+% \begin{lstlisting}[language=Dedalus, float=false, firstnumber=2]
+% toStorage(val,leaderSig,dest,t') :- signed(val,leaderSig,l,t), storageNodes(dest,l,t), delay(t,t') 
+% \end{lstlisting}
+We assume that Dedalus programs are composed of separate \textbf{components} $C$, each with a non-empty set of rules $\overline{\varphi}$.
+% \heidi{maybe mention here that the set of rules is non-empty, this allows us to ignore the trivial case for the rest of the paper}
+In our running example, \Cref{lst:leader,lst:storage} define the leader component and the storage component.
+All the rules of a component are executed together on a single physical node.
+Many instances of a component may be deployed, each on a different node.
+The node at location \ded{addr} only has access to facts $f$ with $\pi_L(f) =$ \ded{addr}, modeling 
+the shared-nothing property of distributed systems.
+
+% \jmh{you previously said a component references ``an exclusive set'' of IDB relations, but that seems wrong -- overlap of body literals across components is possible, yes?} \david{Actually, no; if we decouple the component and both $C_1$ and $C_2$ need to read from the same relation, we must rename it (hence the acks' relation in Figure 3).}
+We define a rule's \textbf{references} as the IDB relations in its body; a component
+references the set of relations referenced by its rules.
+% \natacha{why does it have to be unique}
+For example,
+the storage component in Listing~\ref{lst:storage} references \ded{toStorage}, \ded{hashset}, \ded{collisions}, and \ded{numCollisions}.
+A IDB relation is an \textbf{input} of a component $C$ if it is referenced in $C$ and it is not in the head of any rules of $C$; \ded{toStorage} is an input to the storage component.
+A relation that is not referenced in $C$ but appears in the head of rules in $C$ is an \textbf{output} of $C$; \ded{fromStorage} is an output of the storage component. 
+Note that this formulation explicitly allows a component to have multiple inputs and multiple outputs.
+Inputs and outputs of the component correspond to asynchronous input and output channels of each node.
+
+
+Our discussion so far has been at the level of rules; we will also need to reason about individual facts. 
+A \textbf{proof tree}~\cite{alice} can be constructed for each IDB fact $f$, where $f$ lies at the root of the tree,
+each leaf is an EDB or input fact, and each internal node is an IDB fact derived from its children via a single rule.
+% \jmh{restoring the proof tree example for now, since Natacha asked about it in Section 3.}
+Below we see
+a proof tree for one fact in \ded{toStorage}:
+% (say \ded{toStorage('hi', 0x7465, b.b.us:5678, 9)}) based on the first two rules of \Cref{lst:leader}. 
+% Each node in the tree represents a specific fact---e.g. $f_{in} = \mbox{\ded{in('hello', a.b.us:5678, 6)}}$, $f_{sign} =
+% \mbox{\ded{sign('hi', 0x7465)}}$, $f_{signed} = \mbox{\ded{signed('hi', 0x7465, a.b.us:5678, 6)}}$, etc.
+
+\begin{tikzpicture}[
+every node/.style={fill=lightgray},
+level 1/.style={sibling distance=45mm, level distance=0.8cm},
+level 2/.style={sibling distance=40mm, level distance=0.8cm},
+level 3/.style={sibling distance=20mm},
+% level 4/.style={sibling distance=15mm, level distance=0.3cm},
+mylabel/.style={draw=none, fill=none, text=gray, font=\footnotesize, inner sep=0pt}
+]
+\node (root) {\fact{toStorage('hi', 0x7465, b.b.us:5678, 9)}} {
+child { node (signed) {\fact{signed('hi', 0x7465, a.b.us:5678, 6)}} {
+child { node[right] {\fact{in('hi', a.b.us:5678, 6)}}}
+child { node[right] {\fact{sign('hi', 0x7465)}}}
+}}
+child { node {\fact{storageNodes(b.b.us:5678)}} }
+child { node {\fact{delay(('hi', 0x7465, a.b.us:5678, 6, b.b.us:5678), 9)}} }
+};
+
+\node[mylabel, above right=-1mm and 6mm of root] (label1) {{\tiny \Cref{line:leader-broadcast}}};
+\draw[dashed, ->, gray] (label1) to[bend right=20] (root);
+
+\node[mylabel, above left=2mm and -8mm of signed] (label2) {{\tiny \Cref{line:leader-sign}}};
+\draw[dashed, ->, gray] (label2) to[bend left=30] (signed);
+\end{tikzpicture}
+
+% \begin{center}
+% \begin{tikzpicture}[
+% every node/.style={},
+% level 1/.style={sibling distance=25mm, level distance=0.8cm},
+% level 2/.style={sibling distance=25mm, level distance=0.5cm},
+% level 3/.style={sibling distance=20mm, level distance=0.3cm},
+% level 4/.style={sibling distance=15mm, level distance=0.3cm},
+% mylabel/.style={draw=none, fill=none, text=gray, font=\footnotesize, inner sep=0pt}
+% ]
+% \node (root) {$f_{toStorage}$} {
+% child { node {$f_{signed}$ } {
+% child { node {$f_{in}$}}
+% child { node {$f_{sign}$}}
+% }}
+% child { node {$f_{storageNodes}$} }
+% child { node {$f_{delay}$ } }
+% };
+
+% \node[mylabel, below left=-2mm and 8mm of root] (label1) {\Cref{line:leader-broadcast}};
+% \draw[dashed, ->, gray] (label1) to[bend left=20] (root);
+
+% \node[mylabel, above left=2mm and 2mm of root-1] (label2) {\Cref{line:leader-sign}};
+% \draw[dashed, ->, gray] (label2) to[bend right=30] (root-1);
+% \end{tikzpicture}
+% \end{center}
+
+\begin{lstlisting}[language=Dedalus, label={lst:leader}, caption={Hashset leader in Dedalus.}]
+signed(val,leaderSig,l,t) :- in(val,l,t), sign(val,leaderSig) |\label{line:leader-sign}|
+toStorage(val,leaderSig,l',t') :- signed(val,leaderSig,l,t), storageNodes(l'), delay((val,leaderSig,l,t,l'),t') |\label{line:leader-broadcast}|
+acks(src,sig,val,collCnt,l,t) :- fromStorage(src,sig,val,collCnt,l,t) |\label{line:leader-ACK}|
+acks(src,sig,val,collCnt,l,t') :- acks(src,sig,val,collCnt,l,t), t'=t+1 |\label{line:leader-persist}|
+numACKs(count<src>,val,collCnt,l,t) :- acks(src,sig,val,collCnt,l,t) |\label{line:leader-count-ACKs}|
+certs(cert<sig>,val,collCnt,l,t) :- acks(src,sig,val,collCnt,l,t) |\label{line:leader-cert}|
+outCert(cer,val,collCnt,hashed,l',t') :- certs(ce,val,collCnt,l,t), numACKs(cnt,val,collCnt,l,t), numNodes(cnt), client(l'), delay((cer,val,collCnt,hashed,l,t,l'),t') |\label{line:leader-cert-out}|
+outInconsistent(val,l',t') :- acks(src1,sig1,val,collCnt1,l,t), acks(src2,sig2,val,collCnt2,l,t), collCnt1 != collCnt2, client(l'), delay((val,l,t,l'),t') |\label{line:leader-inconsistency-out}|
+\end{lstlisting}
+
+% \michael{I'm probably misunderstanding something, but since the first and third rules of Listing~\ref{lst:storage} are happening at the same timestep, won't every value be reported as colliding with itself? Should rule 1 should have $t+1$ in the head? Or maybe that's intentional because you always want rule 4 to have a count of at least 1?}
+% \michael{I think Listing~\ref{lst:storage} might be reporting collisions for values that do not have valid leader signatures?}
+% \michael{If a value is sent more than once, it seems possible that it appears multiple times in outCert and also potentially in outInconsistent?}
+\begin{lstlisting}[language=Dedalus, label={lst:storage}, caption={Hashset storage node in Dedalus.}]
+hashset(hashed,val,l,t') :- toStorage(val,leaderSig,l,t), hash(val,hashed), verify(val,leaderSig), t'=t+1 |\label{line:storage-write}|
+hashset(hashed,val,l,t') :- hashset(hashed,val,l,t), t'=t+1 |\label{line:storage-persist}|
+collisions(val2,hashed,l,t) :- toStorage(val1,leaderSig,l,t), hash(val1,hashed), hashset(hashed,val2,l,t) |\label{line:storage-collisions}|
+numCollisions(count<val>,hashed,l,t) :- collisions(val,hashed,l,t) |\label{line:storage-num-collisions}|
+fromStorage(l,sig,val,collCnt,l',t') :- toStorage(val,leaderSig,l,t), hash(val,hashed), numCollisions(collCnt,hashed,l,t), sign(val,sig), leader(l'), delay((sig,val,collCnt,l,t,l'),t') |\label{line:storage-ACK}|
+\end{lstlisting}
+
+
+
+\subsection{Correctness}
+\label{sec:general-correctness}
+This paper transforms single-node Dedalus components into ``equivalent'' multi-component, multi-node Dedalus programs; the transformations can be composed to scale entire distributed protocols.
+For equivalence, we want a definition that satisfies any client (or observer) of the input/output channels of the original program.
+To this end we employ equivalence of concurrent histories as defined for linearizability~\cite{linearizability}, the gold standard in distributed systems.
+
+% Note that our goal here is not to show Linearizability (equivalence to a serial history).
+% Instead, we will use analysis of our Dedalus specs to prove that our transformations preserve equivalence---given the same input facts, the transformed program can only produce outputs (with the same location and time) that could have been produced by the original program.
+% \nc{this reads very strangely. Why do we not want to show linearizability? it sounds like we're trying to prove something weaker, or that we can't prove that we're lineraizable. I strongly think we should add back the discussion of why we have to adapt the definition of lineraizability}
+% \jmh{Please do. My understanding is that we borrow the definitions of history and equivalence from Herlihy and Wing, but we do not particularly aim for linearizability -- we're not asking for equivalence to a linear history, but we are testing equivalence in their terms. Did I get that wrong?}
+% \david{I have a longer explanation in \Cref{app:mutually-independent-decoupling-proof} that we can pull up}
+
+We assume that a history $H$ can be constructed from any run of a given Dedalus program $P$. Linearizability traditionally expects every program to include a specification that defines what histories are "legal". We make no such assumption and we consider any possible history generated by the unoptimized program $P$ to define the specification.  As such, the optimized program $P'$ is linearizable if any run of $P'$ generates the same output facts with the same timestamps as some run of $P$.
+% \jmh{Make clear facts includes same location and time}
+
+%A linearizable history consists of invocations with matching responses, each associated with a wall-clock time.
+%Although Dedalus does not have the concept of invocations, matching responses, or wall clock times, since $P$ must be linearizable before transformation, there must exist \textit{some} function from the facts $f$ (including the values for location $\pi_L(f)$ and time $\pi_T(f)$) of input/output relations of $P$ to invocations and matching responses.
+%Therefore, via the same function, given some input facts, any run of the transformed Dedalus program $P'$ that produces the same output facts as some run of the original $P$ must also be linearizable.
+
+% By producing a subset of runs possible in the original program, our transformations guarantee safety but not necessarily liveness.
+% \nc{You include this here as if it's not a big deal, but it's a big bomb you're dropping here. I'd add it in the intro as an explicit limitation}
+
+% \michael{I'm not sure I fully understand the definition of histories or equivalence here. Informally, is it that two programs are equivalent if given the same tuples fed into a distinguished ``in'' relation, they will eventually produce the same set of output tuples in a distinguished ``out'' relation, ignoring the l and t columns of out?}
+% \kaushik{Adding to Michael's point, it seems unclear whether all you care about is the set of output tuples, or their ordering, etc.}
+
+
+% \david{Talk about f failures, correct messages are eventually delivered, etc?}
+% \nc{I would be careful about "avoiding modifying fault tolerance". It's unclear to me what guarantees (in terms of f), we actually afford here, so I would avoid claiming too much}
+% \heidi{I agree a sentence here about the system model would be nice, could mention assumptions wrt message ordering, synchrony, no clock sync etc}
+% \jmh{I turned that "sentence" into a long paragraph up above.}
+
+Our rewrites are safe over protocols that assume the following fault model:
+an asynchronous network (messages between correct nodes will eventually be delivered) where up to $f$ nodes can suffer from
+general omission failures~\cite{generalOmission} (they may fail to send or receive some messages).
+After optimizing, one original node $n$ may be replaced by multiple nodes $n_1, n_2, \ldots$; the failure of any of nodes $n_i$ corresponds to a partial failure of the original node $n$, which is equivalent to the failure of $n$ under general omission.
+% \nc{So this means that your optimisations don't work with a fail stop protocol? You can't really assume a model, you have to assume the model that the protocol is already working in} \heidi{OFT is a can of interesting exciting worms - maybe stick with the weaker claim of crash faults + partial sync / async. Safety wise this is same as omission but it means you can make stronger assumptions when reasoning about liveness}
+
+% Our rewrites can also increase message latency, which we discuss in~\Cref{sec:optimization-and-performance,sec:conclusion}.
+% \nc{given that most modern protocols assume a partially synchronous setup, this is a dangerous argument to make}
+
+\tr{Full proofs, preconditions, and mechanisms for the rewrites described in \Cref{sec:decoupling,sec:partitioning} can be found in \Cref{app:decoupling}.}
+{Due to a lack of space, we omit the proofs of correctness of the rewrites described in~\Cref{sec:decoupling,sec:partitioning}.
+Full proofs, preconditions, and rewrite mechanisms can be found in the appendix of our technical report at \url{https://github.com/rithvikp/autocomp/blob/master/benchmarks/vldb24/Automatic_Compartmentalization_tr.pdf}.}

@@ -1,0 +1,158 @@
+\section{Introduction}
+\label{sec:intro}
+
+% \jmh{Possible optimization for VLDB reviewers: use database words in the title. Maybe "declarative" or "optimizer". "Optimizing Declarative Protocol Specifications"? "Optimizing Distributed Protocols with Query Rewrites"?}
+
+Promises of better cost and scalability have driven the migration of database systems to the cloud. 
+Yet, the distributed protocols at the core of these systems, such as 2PC~\cite{mohan1986transaction} or Paxos~\cite{paxos}, are not designed to scale:
+when the number of machines grows, overheads often increase and throughput drops.
+% due to the overhead of coordination.
+As such, there has been a wealth of research on developing new, scalable distributed protocols.
+Unfortunately, each new design requires careful examination of prior work and new correctness proofs; the process is ad hoc and often
+error-prone~\cite{epaxos-broken,zyzzyvaBug, craqBug, raftBug, raftDissertation, protocolBugsList}.
+Moreover, due to the heterogeneity
+of proposed approaches, each new insight is localized to its particular protocol and cannot
+easily be composed with other efforts.
+% \jmh{This argument would be stronger if we can demonstrate compositionality in our examples.}
+% \david{All of our examples demonstrate composability at the protocol level (we applied multiple optimizations to the same protocol). At the component level, we decouple and partitions broadcast or collect rules, like proxy leaders in Paxos.}
+
+This paper offers an alternative approach.
+Instead of creating new distributed protocols from scratch, we formalize scalability optimizations into \textit{\changebars{rule-based}{rule-driven} rewrites} that are correct by construction 
+% one only hyphenates if using as an adjective:
+% e.g. ``correct-by-construction scaling''.
+and can be applied to \textit{any} distributed protocol.
+% By enabling composable, reusable optimizations, we open the door to the creation of an automatic optimizer for distributed protocols.
+
+% JMH: I rewrote the differentiating paragraphs; the old ones weren't really on target.
+To rewrite distributed protocols, we take a page from traditional SQL query optimizations.
+Prior work has shown that distributed protocols
+can be expressed declaratively as sets of queries in a SQL-like language such as Dedalus~\cite{dedalus}, which we adopt here. 
+Applying query optimization to these protocols thus seems like an appealing way forward. Doing so correctly however, requires care, as the domain of distributed protocols requires optimizer transformations whose correctness is subtler than classical matters like the associativity and commutativity of join.
+In particular, transformations to scale across machines must reason about program equivalence in the face of changes to spatiotemporal semantics like the order of data arrivals and the location of state.
+% drives us to develop optimizations that differ from those used in databases today.
+% \accheng{Not clear to me why distributed protocols requires different optimizations, maybe reword for clarity}
+
+% \jmh{David, you're killing me here putting this back in. We are not attempting to reduce the messaging overhead of coordination in most of this work. We are scaling programs across machines, often by \emph{adding more} messaging (decoupling), with a focus on avoiding additional coordination. Moreover your characterization of SQL optimization as reducing sequential disk I/Os is very 1975, and will offend many reviewers.}
+% \david{I agree that I don't actually know what different SQL query optimizers do and I need help contrasting that with us.
+% I do think that either way, we need to emphasize that scaling with coordination specifically is bad for distributed protocols, whereas SQL sometimes tolerates it (when it operates over big data?), so we'll pursue coordination-free scaling in the paper.}
+% \jmh{How about we rescue my text about minimizing the use of coordination to scale your coordination. I know you do a little of that in the end, but even there you say "it's just for a special case with low write rates".}
+% \david{I'm more comfortable with your old alternative paragraph, assuming the reader will be curious to continue reading about why the 2 approaches are different. I think saying "no more coordination in your coordination protocol" is fun and mostly true, but there's cases where it works out (like Scalog and Delos) and it's not obvious why it's bad.}
+% \jmh{OK. Sleep time for me. Maybe you too? 4-5 hours can do a lot of good for the following 8.} 
+% \jmh{Unlike MapReduce, SQL systems don't tend to use coordination much. You're trying too hard to say that SQL systems can't do this, or don't focus on what we focus on. I think that quickly becomes obvious in the decoupling discussion. And the partitioning we do is mostly just very aggressive versions of what SQL systems do, which is also fine---you can't optimize Paxos in SQL Server, it's fine that SQL people did some related things, we don't have to have sheer database novelty at every point, because what we have achieved is an unlikely and remarkable application of ``database ideas'' in a new domain. So my inclination is to assert that we need different optimizations for protocols, and then roll into the intro to decoupling and partitioning.}
+% % \jmh{Having said that, if time were to permit I might try a different approach in the intro for a DB conference -- I think our old intro was trying to appeal to OSDI types. WHat I'm thinking of is to contextualize this paper as a long-awaited payoff of the Declarative Languages thread -- DB systems have something to teach Computing, one of our claims is that declarative languages + optimizers = goodness, but we never really saw the payoff of that in distributed systems. Until now.}
+% \jmh{Setting aside these details, one thing the intro does not do is put this paper in context with the longer agenda of fully automated optimization: calibration, cost model, and search. We need something along those lines to protect ourselves from readers who expect those things and are disappointed when they don't find them. We need to aggressively assert that Step 1---identify transformations---is not just paper-worthy, it's fucking cool.}
+
+% However, the domain of distributed protocols drives us to develop new optimizations that are not covered in the database query optimization literature. 
+
+% However, we may not want to scale distributed protocols in the same way that distributed query processing scales.
+% % Optimization objective is different? Sure but we're not worried about 
+% % a cost formula yet so this seems irrelevant.
+% Many SQL optimizations for scalability focus on throughput for a one-shot job over large volumes of data; the objective is to maximize dataflow bandwidth and to load-balance to avoid stragglers~\cite{parallelDB}.
+% In our setting, we tackle a large volume of streaming data consisting of many small, independent tasks; we must maintain low latency per task and high system throughput. \nc{Nit: to address post deadline, not obvious why this characterises distributed protocols}
+% For distributed protocols, the overhead of \emph{coordination} becomes the key barrier to scaling.
+% \jmh{This is off target -- we don't introduce coordination, and that's really not the problem we're trying to sidestep either.}
+% \david{
+% Distributed query processing prioritizes load balancing at the expense of potential coordination, while the acute overhead of coordination in distributed protocols is precisely the barrier to scalability.
+% Unlike query optimizations, distributed protocol optimizations must cleverly minimize coordination in order to scale.
+% }
+% \nc{I really like this contrast, but I'm missing a "conclusion" from this observation. We should add a sentence that justifies why we need to be smarter/look at it differently given your cool observation}
+
+% Many important protocols in distributed systems are used for \emph{coordination}, including consensus protocols like Paxos and commit protocols like 2PC.
+% Our goal in this work is to scale up these coordination protocols by rewriting the way they manage state and communication.
+% Hence a key constraint in our work is that our rewrites must be both correct and \emph{coordination-free}: we cannot scale coordination by introducing more coordination!
+
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\linewidth]{assets/splash_figure_final.png}
+%     \caption{Two fundamental scaling techniques of this paper.}
+%     % The white boxes are \textit{relations}, and the black arrows represent \textit{rules} in Dedalus \cite{dedalus}. A component (gray bounding box) represents a section of logic belonging to a single machine; red arrows show how scaling rewrites change programs. In decoupling, we split a component into two parts in order to enable pipeline parallelism for the rules requiring intensive computation (shown by hourglasses). In partitioning, we shard data to enable multiple parallel streams of computation.}
+%     % Source: https://docs.google.com/drawings/d/1EM28srtndw6Le5rvubEAvFrs0xrWPW89FZSWjaGK2EQ/edit
+%     \label{fig:overview}
+% \end{figure}
+
+% Our challenge therefore lies in identifying and formalizing common patterns across programs that enable \emph{coordination-free} scaling.
+We focus on applying two fundamental scaling optimizations in this paper: \emph{decoupling} and \emph{partitioning}, which correspond to vertical and horizontal scaling.
+We target these two techniques because (1) they can be generalized across protocols and (2) were recently shown by Whittaker et al.~\cite{compartmentalized} to achieve state-of-the-art throughput on complex distributed protocols such as Paxos.
+While Whittaker's rewrites are handcrafted specifically for Paxos, our goal is to \changebars{systematically decouple and partition}{rigorously define the general preconditions and mechanics for decoupling and partitioning, so they can be used to correctly rewrite} \emph{any} distributed protocol.
+
+% \accheng{Are these the only 2 techniques needed for scaling distributed protocol? What is not addressed? Also, the mention of Paxos is jarring, would recommend a smoother transition}
+
+% \jmh{need a few defensive words about how Michael didn't do what we're doing, he did something more manual} 
+% \jmh{Brag here about performance and correctness?}
+% We see in our performance results that these two optimizations, implemented as composable, automatic rewrites, provide \jmh{BRAG ABOUT PERF GAINS}. Moreover, because the rewrites are relatively simple, correctness follows from small local proofs of the rewrites, rather than holistic proofs about entire protocols.
+% \david{Doesn't seem to be the right place to talk about results}
+
+\textit{Decoupling} improves scalability by spreading \textit{logic} across machines to take advantage of additional physical resources and pipeline parallel computation.
+Decoupling rewrites data dependencies on a single node into messages that are sent via asynchronous channels between nodes.
+Without coordination, the original timing and ordering of messages cannot be guaranteed once these channels are introduced.
+To preserve correctness without introducing coordination, we decouple sub-components that produce the same responses regardless of message ordering or timing: these sub-components are \emph{order-insensitive}.
+Order-insensitivity is easy to systematically identify in Dedalus
+% \accheng{maybe explicitly mention you will focus on Dedalus in this paper before you start talking about it in more detail. you mention it only as an example above but don't say you will be using it}
+thanks to its relational model: Dedalus programs are an (unordered) set of queries over (unordered) relations, so the logic for ordering---time, causality, log sequence numbers---is the exception, not the norm, and easy to identify.
+% \jmh{Previous sentence could be tightened up. Mixes two things. One is that relational languages encourage developers to write ``good'' distributed code: relational languages make it easy to express unordered operations on sets, a bit harder to express ordered execution. The second thing is that order-sensitivity is easy to (conservatively) flag in relational languages: in Dedalus it's just negation or aggregation. We could focus on both these things, or pick one.}
+By avoiding decoupling the logic that explicitly relies on order, we can decouple the remaining order-insensitive sub-components without coordination.
+% \accheng{I'm not sure what my takeaway from this paragraph should be. is it that Dedalus is amendable to decoupling? that you implement decoupling in Dedalus? I would make sure the topic sentence clearly states what the reader should take away}
+
+\textit{Partitioning} improves scalability by spreading \textit{state} across machines and parallelizing compute, a technique widely used in query processing~\cite{gamma,grace}.
+Textbook discussions focus on partitioning data to satisfy a single query operator like join or group-by.
+If the next operator downstream requires a different partitioning, then data must be forwarded or ``shuffled'' across the network.
+We would like to partition data in such a way that \emph{entire sub-programs} can compute on local data without reshuffling.
+We leverage relational techniques like functional dependency analysis to find data partitioning schemes that can allow as much code as possible to work on local partitions without reshuffling between operators.
+This is a benefit of choosing to express distributed protocols in the relational model:
+% \accheng{what was the previous benefit of the relationship approach?}
+functional dependencies are far easier to identify in a relational language than a procedural language.
+% Distributed query processing algorithms like partition-wise joins~\cite{oraclePartitioning} 
+% % \jmh{join should involve NO coordination. it is monotonic and can be streaming} \david{See slack conversation.}
+% avoid coordination by partitioning each table in a query by the joined columns such that related data is colocated on the same partition.
+% Dedalus can extend this intuition to avoid coordination.
+% A Dedalus program is essentially a set of queries over tables, or relations; the relational model makes clear how the state (stored in tables) is used-in and defined-by dataflow (expressed as queries).
+% This enables dependency analysis in program state and join analysis in dataflow, which we can use to find and prove coordination-free partitionings.
+% \nc{I worry that this is still a little too encoded. Curious what other people think, Heidi?} \heidi{As non-database person, I think is a bit much to unpick but I'm also less familar with this terminology than your average sigmod reviewer} \chris{It's a bit dense on the first read-through, but after a couple re-reads it makes more sense—I think the term "cross-data-item constraints in computation" is the densest part of this sentence}
+
+% Using the lens of query processing, we can apply these techniques automatically to complex distributed protocols like Paxos via a language like Dedalus. However these protocols often involve many dozens of interrelated rules, making it tricky to partition broadly yet minimize communication. We make aggressive use of techniques like functional dependency analysis to reason about this in our programs.
+% \david{I think the old version of this paragraph had a tighter thesis and was easier to read. Forwarding data is required in decoupling as well, so it's unclear why that is bad here. The answer is the necessary coordination, same as decoupling; because forwarding can't guarantee timing or ordering, the partitions must coordinate, and we want to avoid coordination.}
+
+
+% \jmh{I'd like to revisit this paragraph after we settle on what if anything we're saying about true coordination.}
+% We also provide techniques for decoupling and partitioning with coordination since they can still improve scalability when coordination is not the common case.
+
+We demonstrate the generality of our optimizations by \changebars{systematically}{methodically} applying rewrites to three seminal distributed protocols: voting, 2PC, and Paxos.
+We specifically target Paxos~\cite{paxosComplex} as it is a protocol with many distributed invariants and it is challenging to verify~\cite{verdi,ironfleet,distai}.
+% \nc{David, this is an example of what I meant yesterday about  being intentional, it's better to say "we apply our optimizations to three protocols, X, Y, and Z than to say "we apply them to distributed protocols, including X}
+The throughput of the optimized voting, 2PC, and Paxos protocols scale by $2\times$, $5\times$, and $3\times$ respectively, a scale-up factor that matches the performance of \changebars{manual}{ad hoc} rewrites~\cite{compartmentalized} when the underlying language of each implementation is accounted for and achieves state-of-the-art performance for Paxos.
+% Our optimized Paxos protocol scales by $3\times$, achieving a maximum throughput of 150,000 commands/s. matching the performance achieved through manual optimization in prior work~\cite{compartmentalized}
+% \nc{not quite. We're not able to get the same "scalability" factor as hand-optimized. This should be the number we report, not the raw number} \david{Say that we reached the scaling limit of the protocol}; our optimized voting and 2PC protocols achieve a $2\times$ and $5\times$ throughput improvement over the base implementations, respectively.
+% Unlike prior works, we do not need to reason about the correctness of our optimized protocols; we reason about the correctness of small optimizations\shadaj{this is confusing, maybe "correctness of general rewrites"}; the protocols are then correct by construction \accheng{run-on sentence}.
+%  \nc{What do we mean by comparable?} \jmh{Let's give a better apples-to-apples with Michael's stuff!}.
+
+Our correctness arguments focus on the equivalence of localized,
+``peephole'' optimizations of dataflow graphs.
+Traditional protocol optimizations often make wholesale modifications to protocol logic and therefore require holistic reasoning to prove correctness.
+We take a different approach. Our rewrite rules modify existing programs with small local changes, each of which is proven to preserve semantics. 
+As a result, each rewritten subprogram is provably indistinguishable to an observer (or client) from the original.
+We do not need to prove that holistic protocol invariants are preserved---they must be.
+Moreover, because rewrites are local and preserve semantics, they can be \emph{composed} to produce protocols with multiple optimizations, as we demonstrate in~\Cref{sec:optimization-and-performance}.
+% The strength of our approach lies in its versatility. \accheng{flow isn't quite linear for this para yet}
+% \heidi{Non-priority: The current intro does not explicitly highlight that you don't need to formalise the protocol's correctness (pre-conditions/post-conditions, inductive invars etc) to use automatic compartmentalization. It's implicitly mentioned here but I think this is huge strength of your approach which I wouldn't necessarily expect from such a paper.}
+
+Our local-first approach naturally has a potential cost: the space of protocol optimization is limited by design as it treats the initial implementation as ``law''.
+It cannot distinguish between true protocol invariants and implementation artifacts, limiting the space of potential optimizations. Nonetheless, we find that, when applying our results to seminal distributed system algorithms, we easily match the results of their (manually proven) optimized implementations.
+% \nc{Added a comment about performance to sandwich the limitations}
+
+In summary, we make the following contributions:
+\begin{enumerate}
+    % \item We present a framework for reasoning about optimizations that can be applied to any distributed protocol.
+    \item We present the preconditions and mechanisms for applying multiple correct-by-construction rewrites of two fundamental transformations: decoupling and partitioning.
+    % \kaushik{do you want to mention you provide the correctness proofs (if not in the paper itself, in an appendix?)} \heidi{I suggest if you want to mention a contribution outside the main paper itself then add a sentence after the contributed list, something like, "Additional, we provide proof of correctness for our transformations in Appendix A"}
+    % \nc{The use of the term precondition appears for the first time here "we present two correct-by-construction example transformations: decoupling and partitioning"}
+    \item We demonstrate the application of these \changebars{rewrites in}{rule-driven rewrites by manually applying them to} complex distributed protocols such as Paxos.
+    \item We evaluate our optimized programs and observe $3-5\times$ improvement in throughput across protocols with state-of-the-art throughput in Paxos,
+    validating the role of correct-by-construction rewrites for distributed protocols.
+    % \nc{Why are we suddenly talking about query optimization? We just said we were different: automatic optimization of distributed protocols?}.
+    % Moreover, our optimized Dedalus implementations provide comparable performance to previous state-of-the-art results~\cite{compartmentalized}, suggesting that easily-optimized declarative specification languages like Dedalus are a viable option for production environments.
+    % \david{Orthogonal to the purpose of this paper and more of a Hydroflow brag.}
+\end{enumerate}
+% \nc{Not urgent but I'm not sure these are the best way to phrase our contributions. Worth revisiting at the end}
+
+\tr{}{Due to a lack of space, the full precondition, mechanism, and proof of correctness of each rewrite in this paper can be found in \url{https://github.com/rithvikp/autocomp/blob/master/benchmarks/vldb24/Automatic_Compartmentalization_tr.pdf}.}

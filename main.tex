@@ -1,0 +1,76 @@
+% This Latex template file set ups a two column paper with several
+% options. 
+% The ACM option (to be set inside preamble.sty)
+% The Usenix option (to be set inside preamble.sty)
+% It also implements (as options) space saving and commenting options
+% (also in preamble.sty)
+
+% When using Usenix, choose this: 
+% \documentclass[letterpaper,twocolumn,10pt]{article}
+% When using ACM, choose this
+\documentclass[sigplan,review]{acmart}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\settopmatter{printfolios=true,printacmref=false}
+
+\usepackage{preamble}
+
+\begin{document}
+\title{Safety of Scaling Byzantine Protocols}
+
+\author{David Chu}
+\orcid{0000-0001-9922-1994}
+\affiliation{
+    \institution{University of California, Berkeley}
+    \country{USA}
+}
+\email{thedavidchu@berkeley.edu}
+
+\author{Chris Liu}
+\orcid{0009-0002-1880-1941}
+\affiliation{
+    \institution{University of California, Berkeley}
+    \country{USA}
+}
+\email{chris-liu@berkeley.edu}
+
+\author{Natacha Crooks}
+\orcid{0000-0002-3567-801X}
+\affiliation{
+    \institution{University of California, Berkeley}
+    \country{USA}
+}
+\email{ncrooks@berkeley.edu}
+
+\author{Joseph M. Hellerstein}
+\orcid{0000-0002-7712-4306}
+\affiliation{
+    \institution{University of California, Berkeley}
+    \country{USA}
+}
+\affiliation{
+    \institution{Sutter Hill Ventures}
+    \country{USA}
+}
+\email{hellerstein@berkeley.edu}
+
+\author{Heidi Howard}
+\orcid{0000-0001-5256-7664}
+\affiliation{
+    \institution{Azure Research, Microsoft}
+    \country{UK}
+}
+\email{heidi.howard@microsoft.com}
+
+\input{0-abstract}
+\maketitle
+
+
+\input{1-intro}
+\input{2-background}
+
+\bibliographystyle{ACM-Reference-Format}
+{\footnotesize
+\bibliography{refs}
+}
+
+\end{document}
