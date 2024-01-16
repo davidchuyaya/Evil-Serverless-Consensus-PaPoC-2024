@@ -4,7 +4,7 @@
 % Package list. Please add packages alphabetically with a quick note
 % of what they do
 % ================================================
-\usepackage[ruled,linesnumbered]{algorithm2e}
+% \usepackage[ruled,linesnumbered]{algorithm2e}
 \usepackage[noend]{algpseudocode}
 \usepackage{amsthm}
 \usepackage{amsmath}
@@ -145,23 +145,13 @@
   \newcommand{\changebars}[2]{#2}
   \newcommand{\pagelimit}[1]{}
   \newcommand{\todo}[1]{}
-  \newcommand{\}
   % User-specific grumblers
    \newcommand{\david}[1]{}
     \newcommand{\jmh}[1]{}
     \newcommand{\natacha}[1]{}
     \newcommand{\nc}[1]{}
     \newcommand{\heidi}[1]{}
-    \newcommand{\kaushik}[1]{}
-    \newcommand{\rithvik}[1]{}
-    \newcommand{\conor}[1]{}
-    \newcommand{\suyash}[1]{}
-    \newcommand{\shadaj}[1]{}
-    \newcommand{\fs}[1]{}
-    \newcommand{\tiemo}[1]{}
     \newcommand{\chris}[1]{}
-    \newcommand{\michael}[1]{}
-    \newcommand{\accheng}[1]{}
 } 
 {
   \newcommand{\grumbler}[2]{{{\bf #1:} #2}}
@@ -174,16 +164,7 @@
     \newcommand{\natacha}[1]{{\color{blue}\grumbler{Natacha}{#1}}}
     \newcommand{\nc}[1]{{\color{blue}\grumbler{Natacha}{#1}}}
     \newcommand{\heidi}[1]{{\color{gold}\grumbler{Heidi}{#1}}}
-    \newcommand{\kaushik}[1]{{\color{red}\grumbler{Kaushik}{#1}}}
-    \newcommand{\rithvik}[1]{{\color{orange}\grumbler{Rithvik}{#1}}}
-    \newcommand{\conor}[1]{{\color{purple}\grumbler{Conor}{#1}}}
-    \newcommand{\suyash}[1]{{\color{green}\grumbler{Suyash}{#1}}}
-    \newcommand{\shadaj}[1]{{\color{yellow}\grumbler{Shadaj}{#1}}}
-    \newcommand{\fs}[1]{{\color{teal}\grumbler{Florian}{#1}}}
-    \newcommand{\tiemo}[1]{{\color{brown}\grumbler{Tiemo}{#1}}}
     \newcommand{\chris}[1]{{\color{mint}\grumbler{Chris}{#1}}}
-    \newcommand{\michael}[1]{{\color{googleblue}\grumbler{Michael}{#1}}}
-    \newcommand{\accheng}[1]{{\color{pink}\grumbler{Audrey}{#1}}}
 }
 
 % ================================================
@@ -280,35 +261,7 @@
 
 % System names
 % ================================================
-\newcommand{\Rust}{\includegraphics[scale=0.015]{assets/rust.png}}
-\newcommand{\sys}{\textsc{Auto-Whittaker}}
-\newcommand{\DedalusVoting}{\Rust{}BaseVoting}
-\newcommand{\DedalusTwoPC}{\Rust{}Base2PC}
-\newcommand{\DedalusPaxos}{\Rust{}BasePaxos}
-\newcommand{\AutoVoting}{\Rust{}ScalableVoting}
-\newcommand{\AutoTwoPC}{\Rust{}Scalable2PC}
-\newcommand{\AutoPaxos}{\Rust{}ScalablePaxos}
-\newcommand{\ScalaPaxos}{BasePaxos}
-\newcommand{\CompPaxos}{CompPaxos}
-\newcommand{\DedalusCompPaxos}{\Rust{}CompPaxos}
-\newcommand{\ourApproach}{\changebars{systematic}{rule-driven} rewrite}
-\newcommand{\OurApproach}{\changebars{Systematic}{Rule-driven} rewrite}
-\newcommand{\traditionalApproach}{\changebars{manual}{ad hoc} rewrite}
-\newcommand{\TraditionalApproach}{\changebars{Manual}{Ad hoc} rewrite}
-
-% Black & white printer-friendly colors from bpy.colors(10) in R
-% ================================================
-\definecolor{black}{HTML}{000000} % modified from 000033
-\definecolor{navy}{HTML}{000099}
-\definecolor{blue}{HTML}{0000FF}
-\definecolor{purple}{HTML}{5000FF}
-\definecolor{violet}{HTML}{9F0FF0}
-\definecolor{pink}{HTML}{EF42BD}
-\definecolor{red}{HTML}{FF758A}
-\definecolor{orange}{HTML}{FFA857}
-\definecolor{yellow}{HTML}{FFDB24}
-% \definecolor{10}{HTML}{FFFF60} Light yellow, too light
-
+\newcommand{\sigmodpaper}{Chu et al.}
 
 % Listings for Dedalus
 % ================================================

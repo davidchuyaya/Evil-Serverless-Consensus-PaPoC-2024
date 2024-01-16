@@ -1,0 +1,114 @@
+\section{Formal behavior of a Byzantine machine}
+\label{sec:bft-formalism}
+A formal specification of the expressivity of Byzantine machines is necessary in order to prove the correctness of rewrites in a Byzantine setting.
+
+\david{Only the messages BFT machines send are relevant.}
+We can reduce a Byzantine machine down to the messages that it sends (and does not send), as that is the only way in which they can affect other machines.
+Their internal state is largely irrelevant, aside from their ability to reuse messages that they have previously received, which we will discuss in \Cref{sec:signed-channels-formalism}.
+
+\david{Encoding BFT behavior as logic.}
+We will encode a Byzantine machine's ability to send arbitrary messages as theoretical rewrites that append logic to each machine.
+These pieces of logic are conditioned on the boolean \texttt{isByzantine(l)}, where \texttt{l} is the machine's location identifier, and \texttt{isByzantine(l)} is true for at most $f$ unique locations.
+Byzantine machines not only have the ability to send arbitrary messages, they can also ignore their assigned roles and refuse to execute existing logic: we formalize this flexibility by conditioning all existing logic on \texttt{!isByzantine(l)}.
+
+\david{Not breaking cryptography.}
+Most BFT protocols also assume that Byzantine machines cannot break cryptography~\cite{pbft}.
+Therefore, we must distinguish between message fields for which a Byzantine machine can send arbitrary data, and fields that encode cryptographic information.
+We assume that each message channel is strongly typed and annotated with their cryptographic guarantees.
+
+We will formalize what messages a Byzantine machine can send to message channels of the following types used in PBFT~\cite{pbft}: plaintext messages (\Cref{sec:plaintext-channels-formalism}), signed messages (\Cref{sec:signed-channels-formalism}), and certificates and nested types (\Cref{sec:certificate-channels-formalism}).
+
+\subsection{Plaintext message channels}
+\label{sec:plaintext-channels-formalism}
+Plaintext message channels accept all messages with no cryptographic guarantees.
+Therefore, any Byzantine machine should be allowed to send messages with arbitrary content to these channels.
+
+To denote message passing, we will use the symbol $\leftsquigarrow$ and annotate the channel with the receiver's location.
+We assume that the function \texttt{machines()} returns the locations of all machines.
+
+\textbf{Rewrite: Plaintext channels.} For each plaintext input channel \texttt{in($f_1, f_2, \ldots$)} on each component in the protocol (including the client interfacing with the protocol), where \texttt{in} accepts messages with fields $f_i$, we will add the following logic to each machine at location $l$:
+\begin{algorithmic}
+\If{isByzantine(l)}
+    \For{time $t \in (0, \infty)$, machine $l' \in$ machines()}
+        \State {numMsgs $\gets$ randInt()}
+        \For{$i \in$ (0, numMsgs)}
+            \State {in@$l' \leftsquigarrow$ (rand(), rand(), $\ldots$)}
+        \EndFor
+    \EndFor
+\EndIf
+\end{algorithmic}
+
+In other words, if the machine is Byzantine, then for each timestep it takes, it will randomly decide how many messages to send to \texttt{in} and populate each message with random values.
+
+This random Byzantine machine allows us to capture the behavior of any Byzantine machine in any protocol without understanding the intricacies of each protocol.
+A run of a Byzantine machine is possible if and only if it is a possible run of the random Byzantine machine.
+
+\subsection{Signed message channels}
+\label{sec:signed-channels-formalism}
+Byzantine machines should not be allowed to break cryptography; if they were allowed to send random values on cryptographic fields, however, they can technically mimic the signatures of keys they do not have access to through random guesses.
+In order to restrict the power of Byzantine machines, we separate message fields into three types:
+(1) unprotected fields,
+(2) protected fields, and
+(3) signatures created by signing over the protected fields.
+We will limit Byzantine machines such that they can only generate signatures by signing the protected fields with either their own keys or the keys of other Byzantine machines, simulating collusion.
+
+We formalize signatures by introducing a signing function \texttt{sign(pk, $f_1, f_2, \ldots$)}, which returns the signature using private key \texttt{pk} over fields $f_i$.
+We also introduce a complementary verification function \texttt{verify(k, sig, $f_1, f_2, \ldots$)}, which returns \texttt{true} if the signature \texttt{sig} is the result of signing the fields $f_i$ with the key \texttt{pk}, where \texttt{k} is the public key corresponding to \texttt{pk}.
+We assume that the function \texttt{keys(l)} returns all keys known by the machine at location $l$.
+
+We assume that all correct machines verify the messages they receive on signed channels, so any incorrectly signed messages will be discarded.
+Therefore Byzantine machines do not need to generate messages with incorrect signatures in our formalism.
+
+\textbf{Rewrite: Signed channels.} For each signed input channel \texttt{in($u_1, u_2, \ldots, p_1, p_2, \ldots$, sig)} on each component in the protocol (including the client), where \texttt{in} accepts messages with unprotected fields $u_i$ and protected fields $p_i$ with signature \texttt{sig}, we will add the following logic to each machine at location $l$:
+\begin{algorithmic}
+\If{isByzantine(l)}
+    \For{machine $l' \in$ machines() \textbf{where} isByzantine($l'$)}
+        \For{time $t \in (0, \infty)$, key $k \in$ keys($l'$), location $l'' \in$ machines()}
+            \State {numMsgs $\gets$ randInt()}
+            \For{$i \in$ (0, numMsgs)}
+                \State {$u_1, u_2, \ldots \gets$ rand(), rand(), $\ldots$}
+                \State {$p_1, p_2, \ldots \gets$ rand(), rand(), $\ldots$}
+                \State {sig $\gets$ sign($k, p_1, p_2, \ldots$)}
+                \State {in@$l'' \leftsquigarrow$ ($u_1, u_2, \ldots, p_1, p_2, \ldots$, sig)}
+            \EndFor
+        \EndFor
+    \EndFor
+\EndIf
+\end{algorithmic}
+
+\david{Forwarding.}
+In addition to generating and signing arbitrary messages, Byzantine machines can also forward along signed messages, where the protected fields are unchanged.
+We formalize this by allowing Byzantine machines to store signed messages it has received in a data structure, \texttt{msg\_store($u_1,u_2,\ldots,p_1,p_2,\ldots,sig$)}, and randomly send messages in this data structure to other machines.
+\david{Technically, Byzantine machines can lie about being at different locations and therefore share messages faster than actual message passing. We can formalize this in Dedalus by creating synchronous channels between Byzantine machines. Should I mention it?}
+
+\textbf{Rewrite: Forwarding signed messages.} For each signed input channel \texttt{in($u_1, u_2, \ldots, p_1, p_2, \ldots$, sig)} on each component in the protocol (including the client), we will add the following logic to each machine at location $l$:
+\begin{algorithmic}
+\If{isByzantine(l)}
+    \State {msg\_store $\gets$ in@l($u_1, u_2, \ldots, p_1, p_2, \ldots$, sig)}
+    \For{time $t \in (0, \infty)$, message $m \in$ msg\_store, location $l' \in$ machines()}
+        \State {numMsgs $\gets$ randInt()}
+        \For{$i \in$ (0, numMsgs)}
+            \State {$u'_1, u'_2, \ldots \gets$ rand(), rand(), $\ldots$}
+            \State {in$@l' \leftsquigarrow$ ($u_1', u_2', \ldots, m.p_1, m.p_2, \ldots$, m.sig)}
+        \EndFor
+    \EndFor
+\EndIf
+\end{algorithmic}
+
+\david{Equivalence between MACs and signatures.}
+Note that we do not differentiate between MACs (Message Authentication Codes)~\cite{MAC} and public-key signatures~\cite{signature} in our formalism.
+Both produce a signature that can be verified by a machine with the correct key.
+For MACs, the key is symmetric and must be private between the sender and receiver.
+Public-key signatures are asymmetric, so only the sender has access to the private key, but any machine has access to the public key and can verify the message.
+We assume in our formalism that \texttt{verify} will return the correct result depending on the signing scheme (true if \texttt{pk = k} for MACs, and true if \texttt{pk} is the private key corresponding to \texttt{k} for public-key signatures).
+
+\david{Equivalence between signing the digest of a message and the whole message.}
+Note that we also do not distinguish between signing the digest (hash) of a message or signing a message, since signing the digest is just a performance optimization~\cite{pbft}.
+
+\subsection{Certificates and nested types}
+\label{sec:certificate-channels-formalism}
+BFT protocols often combine multiple signed messages in a single message, creating message types with complex, nested structures.
+For example, during view change in PBFT, machines send arrays of sets of signed messages~\cite{pbft}.
+We cannot generically define a way for Byzantine machines to create all possible such data structures.
+We assume that given a message channel, a Byzantine machine can decompose the message type and populate any array or set with a random number of messages.
+For each nested message, it can generate random values for unprotected fields (using the plaintext channels rewrite), and for any protected fields and a corresponding signature, it can either sign with its own key, use the key of another Byzantine machine to sign (using the signed channels rewrite), or copy the protected fields and signature from a previously received message (using the forwarding signed messages rewrite).
