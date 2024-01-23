@@ -3,7 +3,7 @@
 A formal specification of the expressivity of Byzantine machines is necessary in order to prove the correctness of rewrites in a Byzantine setting.
 
 \david{Only the messages BFT machines send are relevant.}
-We can reduce a Byzantine machine down to the messages that it sends (and does not send), as that is the only way in which they can affect other machines.
+We can reduce a Byzantine machine down to the messages that it sends (and does not send).
 Their internal state is largely irrelevant, aside from their ability to reuse messages that they have previously received, which we will discuss in \Cref{sec:signed-channels-formalism}.
 
 \david{Encoding BFT behavior as logic.}
@@ -16,7 +16,7 @@ Most BFT protocols also assume that Byzantine machines cannot break cryptography
 Therefore, we must distinguish between message fields for which a Byzantine machine can send arbitrary data, and fields that encode cryptographic information.
 We assume that each message channel is strongly typed and annotated with their cryptographic guarantees.
 
-We will formalize what messages a Byzantine machine can send to message channels of the following types used in PBFT~\cite{pbft}: plaintext messages (\Cref{sec:plaintext-channels-formalism}), signed messages (\Cref{sec:signed-channels-formalism}), and certificates and nested types (\Cref{sec:certificate-channels-formalism}).
+We will formalize what messages a Byzantine machine can send based on the message types used in PBFT~\cite{pbft}: plaintext messages (\Cref{sec:plaintext-channels-formalism}), signed messages (\Cref{sec:signed-channels-formalism}), and certificates and nested types (\Cref{sec:certificate-channels-formalism}).
 
 \subsection{Plaintext message channels}
 \label{sec:plaintext-channels-formalism}
@@ -45,7 +45,7 @@ A run of a Byzantine machine is possible if and only if it is a possible run of 
 
 \subsection{Signed message channels}
 \label{sec:signed-channels-formalism}
-Byzantine machines should not be allowed to break cryptography; if they were allowed to send random values on cryptographic fields, however, they can technically mimic the signatures of keys they do not have access to through random guesses.
+Byzantine machines cannot break cryptography, but a Byzantine machine sends random values can technically mimic the signatures of keys they do not have access to.
 In order to restrict the power of Byzantine machines, we separate message fields into three types:
 (1) unprotected fields,
 (2) protected fields, and
@@ -75,11 +75,12 @@ Therefore Byzantine machines do not need to generate messages with incorrect sig
     \EndFor
 \EndIf
 \end{algorithmic}
+\chris{The triple nested for loop threw me off for a bit, but after looking at it a bit longer it makes sense and looks very clean}
 
 \david{Forwarding.}
-In addition to generating and signing arbitrary messages, Byzantine machines can also forward along signed messages, where the protected fields are unchanged.
-We formalize this by allowing Byzantine machines to store signed messages it has received in a data structure, \texttt{msg\_store($u_1,u_2,\ldots,p_1,p_2,\ldots,sig$)}, and randomly send messages in this data structure to other machines.
-\david{Technically, Byzantine machines can lie about being at different locations and therefore share messages faster than actual message passing. We can formalize this in Dedalus by creating synchronous channels between Byzantine machines. Should I mention it?}
+In addition to generating and signing arbitrary messages with its own keys, Byzantine machines can also forward along messages signed by correct machines, signed with keys they do not have access to, as long as the protected fields are unchanged.
+We formalize this by allowing Byzantine machines to store signed messages they have received in a data structure \texttt{msg\_store($u_1,u_2,\ldots,p_1,p_2,\ldots,sig$)} and randomly send messages in this data structure to other machines.
+\david{Technically, Byzantine machines can lie about being at different locations and therefore share messages faster than actual message passing. We can formalize this in Dedalus by creating synchronous channels between Byzantine machines. Should I mention it?} \chris{I think it's worth recognizing this as a side comment, but would the Dedalus formalism be relevant here?}
 
 \textbf{Rewrite: Forwarding signed messages.} For each signed input channel \texttt{in($u_1, u_2, \ldots, p_1, p_2, \ldots$, sig)} on each component in the protocol (including the client), we will add the following logic to each machine at location $l$:
 \begin{algorithmic}
@@ -100,15 +101,16 @@ Note that we do not differentiate between MACs (Message Authentication Codes)~\c
 Both produce a signature that can be verified by a machine with the correct key.
 For MACs, the key is symmetric and must be private between the sender and receiver.
 Public-key signatures are asymmetric, so only the sender has access to the private key, but any machine has access to the public key and can verify the message.
-We assume in our formalism that \texttt{verify} will return the correct result depending on the signing scheme (true if \texttt{pk = k} for MACs, and true if \texttt{pk} is the private key corresponding to \texttt{k} for public-key signatures).
+We assume in our formalism that \texttt{verify} will return the correct result depending on the signing scheme (true if \texttt{pk = k} for MACs, and true if \texttt{pk} is the private key corresponding to \texttt{k} for public-key signatures). \chris{oooh that's pretty cool}
 
 \david{Equivalence between signing the digest of a message and the whole message.}
 Note that we also do not distinguish between signing the digest (hash) of a message or signing a message, since signing the digest is just a performance optimization~\cite{pbft}.
+
 
 \subsection{Certificates and nested types}
 \label{sec:certificate-channels-formalism}
 BFT protocols often combine multiple signed messages in a single message, creating message types with complex, nested structures.
 For example, during view change in PBFT, machines send arrays of sets of signed messages~\cite{pbft}.
-We cannot generically define a way for Byzantine machines to create all possible such data structures.
-We assume that given a message channel, a Byzantine machine can decompose the message type and populate any array or set with a random number of messages.
-For each nested message, it can generate random values for unprotected fields (using the plaintext channels rewrite), and for any protected fields and a corresponding signature, it can either sign with its own key, use the key of another Byzantine machine to sign (using the signed channels rewrite), or copy the protected fields and signature from a previously received message (using the forwarding signed messages rewrite).
+We cannot generically define a way for Byzantine machines to create all possible data structures.
+Instead, we assume that given a message channel, a Byzantine machine can decompose the message type and populate any array or set with a random number of messages. \chris{oh this is a really nice way of generalizing Byzantine behavior to nested data structures}
+For each nested message, it can generate random values for unprotected fields (using the plaintext channels rewrite), and for any protected fields and a corresponding signature, it can either sign with keys it has access to (using the signed channels rewrite), or copy the protected fields and signature from a previously received message (using the forwarding signed messages rewrite).

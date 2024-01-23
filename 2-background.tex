@@ -3,7 +3,7 @@
 \textbf{Rule-driven rewrites.}
 \sigmodpaper{} presents a set of rule-driven rewrites that can be applied to arbitrary distributed protocols if the preconditions are met.
 Rewrites improve protocol throughput by scaling up, spreading the logic or data of an individual machine $m$ across multiple machines $m_1, m_2, \ldots$ through decoupling and partitioning, respectively.
-When a machine $m$ is scaled up in this way, new input channels may be introduced between its new machines $m_i$ in order to transfer data, and machines that previously sent messages to $m$ may need to forward messages to a specific machine in $m_i$.
+When a machine $m$ is scaled up in this way, new input channels may be introduced between its new machines $m_i$ in order to transfer data, and machines that previously sent messages to $m$ may need to forward messages to a specific machine in $m_i$ or duplicate the message to all machines $\overline{m_i}$.
 
 \sigmodpaper{} proved the correctness of the rewrites over Dedalus~\cite{dedalus}, a declarative dataflow language for distributed systems based on Datalog.
 Due to limited space, we will instead discuss rewrites over event-driven pseudocode instead.
@@ -16,7 +16,7 @@ We will use PBFT~\cite{pbft}, a foundational BFT protocol, as a case study in ou
 
 \textbf{Correctness.}
 Correctness is defined by the observable program behavior.
-A rewrite is correct if given any program $P$, a rewritten program $P'$, a any set of inputs (and their respective send times), $P'$ always generates the same outputs with the same timestamps as some possible run of $P$~\cite{autocomp}.
+A rewrite is correct if given any program $P$, a rewritten program $P'$, and any set of inputs (and their respective send times), $P'$ always generates the same outputs with the same timestamps as some possible run of $P$~\cite{autocomp}.
 
-Note that the fault tolerance of a protocol does not change as a result of scaling up.
-The Byzantine failure of any new machine $m_i$ is equivalent to the failure of the original machine $m$.
+% Note that the fault tolerance of a protocol does not change as a result of scaling up.
+% The Byzantine failure of any new machine $m_i$ is equivalent to the failure of the original machine $m$. \chris{This part may need more elaboration since it might not be immediately obvious to new readers, or we should at least mention again that we will prove this later}

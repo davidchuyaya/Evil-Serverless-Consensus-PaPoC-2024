@@ -9,7 +9,7 @@ This complexity prevents existing protocols from scaling to accommodate the high
 \david{Chu et al. scales throughput but the rewrites introduce new nodes that can become Byzantine and alter the behavior of protocols.}
 \sigmodpaper{}~\cite{autocomp} provides a new approach to scaling distributed protocols: instead of creating new protocols from scratch, the authors modify existing protocols by identifying a set of localized, rule-driven rewrites.
 By manually applying the rewrites to various components of the voting protocol, 2PC, and Paxos~\cite{paxosComplex}, the authors improved throughput by $2-5\times$.
-However, these rewrites were proven correct assuming non-Byzantine failures, and may not be safe when applied naively to BFT protocols.
+However, these rewrites were proven correct assuming non-Byzantine failures, and are not safe when applied naively to BFT protocols.
 
 \david{Provide example of unintuitive new vector of attack: partitioning}
 Consider the following example of a protocol that contains a single-node, non-Byzantine 2P-Set~\cite{crdt}, a set where removed elements cannot be re-inserted.
@@ -19,7 +19,7 @@ Originally, a Byzantine node within the protocol would be able to fabricate mess
 After partitioning, a Byzantine node could force an item to be re-inserted by ignoring the partitioning scheme and duplicating the insertion message to multiple partitions.
 Then, the Byzantine node could forward any queries on this 2P-Set to a partition of its choice and create the illusion that the 2P-Set is flip-flopping between whether an element has been removed or not.
 In general, without modifications, the rewrites presented by \sigmodpaper{} are unsafe when applied to BFT protocols.
-\david{Should we create a figure?}
+\david{Should we create a figure?} \chris{I think it makes sense without a figure, but I may only think that because I'm already familiar with what you're talking about; I'm always a fan of adding figures to demonstrate a point though}
 
 This paper modifies the rewrites introduced by \sigmodpaper{} and proves their correctness when applied to BFT protocols.
 
@@ -27,11 +27,11 @@ This paper modifies the rewrites introduced by \sigmodpaper{} and proves their c
 The difference in the proofs used by this paper and \sigmodpaper{} can be boiled down to the difference in what messages a correct machine can receive.
 \sigmodpaper{} made two implicit assumptions in their rewrites that do not hold in a Byzantine environment:
 (1) New machines will execute program logic as intended, and
-(2) New input channels will be populated with the expected messages.
+(2) Modified input channels will be populated with the expected messages.
 
 The first assumption is violated if a new machine becomes Byzantine.
-We will show that the combined outputs of newly Byzantine machines is a subset of the possible outputs of the original Byzantine machines, so they do not form a stronger adversary.
-In order to prove this property, we must carefully define what messages Byzantine machine is capable of sending.
+We will show that new Byzantine machines are no more powerful than . \chris{"...no more powerful than old Byzantine machines that existed before protocol rewrites"?}
+In order to prove this property, we must carefully define what messages Byzantine machines are capable of sending.
 
-The second assumption is violated if Byzantine machines attempt to violate the new input channels' invariants, like in the partitioning example presented earlier.
+The second assumption is violated if Byzantine machines attempt to violate the modified input channels' invariants, like in the partitioning example presented earlier.
 We will modify the rewrites such that nodes detect and discard any invariant-violating messages.
