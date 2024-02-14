@@ -1,0 +1,85 @@
+\section{Modifications to rewrites}
+\label{sec:modifications-to-rewrites}
+
+We now present two modifications to the rewrites introduced by \sigmodpaper{}: sender verification (\Cref{sec:sender-verification}) and message verification (\Cref{sec:message-verification}).
+
+\subsection{Sender verification}
+\label{sec:sender-verification}
+The rewrites can introduce new nodes with message channels between them, with the implicit assumption that no other nodes send messages to these channels.\footnote{Rewrites that fall into this category include monotonic decoupling, functional decoupling, asymmetric decoupling, and partial partitioning~\cite{autocomp}.}
+% \heidi{this sentence might be good as a footnote. atm it might not contribute anything to readers who are unfamiliar with the other paper}
+Without additional verification, these channels would be vulnerable to Byzantine attacks from other nodes.
+
+\textbf{Modification: Sender verification.}
+Replace each new channel \texttt{chan(m)} from node $l_1$ to $l_2$ with \texttt{signed\_chan(m, $\sigma$)}, where $\sigma =$ \texttt{sign(skeys[$l_2$], m)}.
+The receiving node $l_2$ only processes a message $m$ if \texttt{verify(pkeys[$l_1$], $\sigma$, m)} returns true.
+
+As an optimization, if functional dependencies~\cite{autocomp,alice} are known, then the sender does not necessary have to sign all fields of the message.
+If there is a functional dependency from message field $x$ to $y$---that is, there is some deterministic function $f$ where $f(x) = y$---then signing over $x$ is sufficient.
+If there is a one-to-one dependency between the fields---there exists some $f^{-1}(y) = x$---then signing over \emph{either} field is sufficient.
+This optimization applies to any BFT protocol that uses collision-resistant hash functions (such as PBFT), where there is a one-to-one dependency between the hash digest and the original message.
+In that case, only the digest has to be signed.
+PBFT itself makes the same observation and only signs the digest on its preexisting channels.
+Note that the inverse of the hash function does not need to be known; this optimization is valid as long as such a function \emph{exists}.
+
+% , adding \Cref{alg:sender-verification-sender} to the sender and \Cref{alg:sender-verification-receiver} to the receiver.
+% We create a new set of keys $sk, pk$ to be shared between the sender and receiver.
+% \david{Is the pseudocode beneath necessary? They're very simple.} \heidi{No}
+
+% \begin{algorithm}
+% \caption{Modifications to the sender for sender verification for each message $m$ originally sent on \texttt{chan} to node $l_2$.}
+% \label{alg:sender-verification-sender}
+% $\sigma \gets$ sign$(sk, m)$\;
+% signed\_chan@$l_2 \leftsquigarrow$ (m, $\sigma$)
+% \end{algorithm}
+
+% \begin{algorithm}
+% \caption{Modifications to the receiver for sender verification.}
+% \label{alg:sender-verification-receiver}
+% \For{(m, $\sigma$) $\in$ signed\_chan(m, $\sigma$)}{
+%     \If{verify(pk, $\sigma$, m)}{
+%         chan(m) $\gets$ m
+%     }
+% }
+% \end{algorithm}
+
+
+\subsection{Message verification}
+\label{sec:message-verification}
+
+The rewrites also introduce channels with implicit assumptions on message content.
+Nodes created through partitioning all share the same types of input channels, but each partition assumes that it will receive a specific disjoint subset of the messages.\footnote{All subcategories of partitioning in~\cite{autocomp}---partitioning with co-hashing, partitioning with dependencies, and partial partitioning---share this assumption.}
+Byzantine nodes can exploit this assumption and send messages to the wrong nodes.
+
+\textbf{Modification: Message verification.}
+For each input channel \texttt{chan(m)} on partition $l_i$, replace all instances of \texttt{chan(m)} with \texttt{correct\_chan(m)}, which contains the subset of messages in \texttt{chan(m)} that are meant for this partition.
+This criteria can be checked with the distribution policy function $D(m)$ as defined in~\cite{autocomp}, which maps each message to its intended partition.
+
+% , as seen in \Cref{alg:message-verification}.
+% The function $D(m)$ is the distribution policy that determines the routing of messages to partitions~\cite{autocomp}.
+
+% \begin{algorithm}
+% \caption{Modifications to the partition for message verification.}
+% \label{alg:message-verification}
+% \For{m $\in$ chan(m)}{
+%     \If{$D(m) = i$}{
+%         correct\_chan(m) $\gets$ m
+%     }
+% }
+% \end{algorithm}
+
+% Partitioning splits data on a single original machine $l$ onto multiple machines $l_1, l_2, \ldots$ with the same logic.
+% After partitioning, any input channel on $l$ will become an input channel on \emph{all} partitions $l_1, l_2, \ldots$, and any machine that sent messages to $l$ would have to reroute the message to the correct partition, depending on the output of the partitioning function $D(m)$ on the message $m$.
+% A Byzantine machine can misbehave by rerouting or duplicating messages to the wrong partition(s). \david{Reference example in intro?}
+% Because the rewrites were introduced assuming no Byzantine failures, partitions did not check whether the messages they received were redirected correctly.
+% We introduce the following modification to the partitioning rewrites to verify that incorrectly routed messages are discarded.
+
+% \textbf{Rewrite: Partitioning verification.}
+% For each input channel \texttt{in(...)} on partition $l_i$ with index $i$, we replace all instances of \texttt{in(...)} in $l_i$ with \texttt{in\_correct(...)} and add the following logic:
+% \begin{algorithm}
+% \caption{Partitioning verification rewrites}
+% \For{m $\in$ in(...)}{
+%     \If{$D(m) = i$}{
+%         in\_correct $\gets$ m
+%     }
+% }
+% \end{algorithm}

@@ -1,0 +1,199 @@
+\section{Proof of correctness}
+\label{sec:proofs}
+We now prove the correctness of the modified rewrites in the presence of Byzantine failures.
+The rewrites are correct if the number of Byzantine fault domains remains unchanged (as discussed in \Cref{sec:correctness}), 
+% \natacha{Not sure that's quite wat you want to say? Why would the BFT nodes evolve in number? Also makes it sound like you don't support reconfiguration. I'd suggest removing that, you've alreayd said that adding replication says in the same "failure domain""}
+and all input channels on correct nodes can correctly handle messages from Byzantine nodes. 
+% \jmh{Once upon a time when I was young, BFT depended on 2/3 quorums. Changing the population size can reduce the ratio of good nodes. Basically a Sybil attack. Does crypto-based BFT protect against Sybil attacks? Bc the rewrites essentially allow attackers to be cloned.}\natacha{@Joe: we make the assumption new nodes stay in the same failure domain to handle this} \jmh{Does this deserve careful discussion? It seems like the unanswered question in the proofs.}
+
+% The number of Byzantine failures does not change after rewrites; both the raw number of failures and the number of fault domains remains unchanged, as discussed in \Cref{sec:correctness}.
+
+\david{Proof structure.}
+We can break down input channels into four types---unmodified, redirected, duplicated, and new channels---and prove that each type can handle messages from Byzantine nodes.
+Unmodified channels are unchanged between the original and rewritten protocols.
+Redirected channels existed on some node $l$ in the original protocol and exist on some corresponding $l_i$ in the rewritten protocol.
+Duplicated channels existed on $l$ in the original protocol and on multiple corresponding $\overline{l}$ in the rewritten protocol.
+New channels are introduced by the rewrites between between $l_1$ and $l_2$ nodes that correspond to the same original node.
+All input channels in a rewritten protocol can be categorized into one of the four types above.
+
+\textbf{Unmodified channels.}
+Because we assumed that the original protocol is already BFT, any messages sent by a Byzantine node in the original protocol must already be correctly handled by unmodified channels.
+We will show that a Byzantine node in the rewritten protocol cannot generate additional messages to unmodified channels by reasoning with the \randomSimulator{}.
+
+\david{Internal state of the Byzantine node.}
+Because the channel is unmodified, by construction, the \randomSimulator{}'s output logic to that channel must also be unchanged.
+What may change is its \emph{state}: a \randomSimulator{} in the rewritten protocol may receive more signed messages from correct nodes.
+This \randomSimulator{} would then be able to forward along more signed messages than in the original protocol (\Cref{sec:forwarding}).
+We will show that \randomSimulator{} cannot receive more messages in the rewritten protocol, so it cannot send more either.
+
+\david{Breakdown by channel type.}
+Consider the input channels in the rewritten protocol through which these messages arrived on the \randomSimulator{}.
+\textit{Unmodified channels}: by definition, a correct node that sends a message to an unmodified channel in the rewritten protocol can send the same message in the original protocol.
+\textit{Redirected or duplicated channels}: the rewrites guarantee that correct nodes only send messages to a node $l_i$ if, in the original protocol, it sent the same messages to the corresponding node $l$.
+\textit{New channels}: the rewrites only introduce new channels between nodes corresponding to the same original node.
+Therefore, nodes connected by new channels must be in the same fault domain.
+Any node that can send a message on a new channel to a Byzantine node must therefore also be Byzantine, breaking our assumption that the sender is correct.
+
+Because the \randomSimulator{} in the rewritten protocol cannot \emph{receive} new messages from correct nodes on any of its input channels, it cannot \emph{produce} any new messages either.
+
+\textbf{Redirected channels.}
+A redirected channel is essentially an unmodified channel where senders redirect all messages from an original node $l$ to a specific corresponding node $l_i$.
+The proof is similar; any message sent to $l_i$ after rewrites could have been sent to $l$ before rewrites. 
+
+\textbf{Duplicated channels.}
+Partitioning duplicates a channel on $l$ across its corresponding partitions $\overline{l} = \{l_1, l_2, \ldots\}$.
+Each channel expects to get a disjoint subset of messages, depending on the distribution policy~\cite{autocomp}.
+This new invariant is enforced by message verification (\Cref{sec:message-verification}); the channel is otherwise unmodified and the proof is similar.
+
+\textbf{New channels.}
+These channels have no counterpart in the original protocol, so we must show that they can correctly handle all Byzantine messages.
+As stated above, new channels are only introduced between nodes in the same fault domain.
+By assumption, all nodes in the fault domain must be correct.
+Sender verification (\Cref{sec:sender-verification}) filters messages from nodes outside the fault domain; therefore, a correct node will not process any Byzantine messages on a new channel.
+
+We have demonstrated that all input channels on correct nodes after rewriting are safe against Byzantine attacks, proving that the rewrites correctly preserve fault tolerance.
+
+
+% \natacha{I feel that you should feel free to put the proofs in the appendix. That gives you a little bit more space to talk about the modelisation, etc.}
+% \heidi{Agreed. Also I find the name of this section a bit confusing. It sounds like you're already introduced the new rewrites and now your just proving them. I think this will be more clear if the rewrites remain and proofs move to the appendix}
+
+% \david{What the rewrites are.}
+% \jmh{This needs to go in the intro! Otherwise people won't know what exploits they should think about.}
+% Broadly speaking, \sigmodpaper{} introduces new machines and message channels through decoupling and partitioning.
+% Decoupling splits logic on a single machine $l$ into two separate machine $l_1$ and $l_2$, which can be executed on separate machines and communicate through newly created message channels.
+% These newly created channels can potentially be exploited by Byzantine machines.
+% Partitioning splits data originally located on a single machine $l$ across many machines $l_1, l_2$, etc, each of which execute the same logic as $l$ but process disjoint sets of data.
+% An external machine that sent messages to $l$ before decoupling or partitioning must reroute or duplicate its messages to the correct $l_i$, which presents another exploitable invariant.
+
+% The predefined functions will be modified as follows: \texttt{allNodes} now contains the location of all nodes post-rewrites, \texttt{isByzantine} can be true for new nodes, and for each node $l_i$ corresponding to some original node $l$, \texttt{keys[$l_i$] = keys[$l$]}.
+
+% \david{What we have to demonstrate for correctness.}
+% We will assume for our proofs that the rewrites are correct when there are no Byzantine failures~\cite{autocomp} and that the protocol which is being rewritten is already Byzantine fault tolerant.
+% We will refer to Byzantine machines in the original protocol as \emph{old Byzantine machines} and those in the rewritten protocol as \emph{new Byzantine machines}.
+% In order to prove the rewrites safe under Byzantine failures, we must demonstrate the following:
+% New and old Byzantine machines are indistinguishable (\Cref{sec:new-machines-fault-tolerance}), and
+% any new assumptions made by message channels are enforced (\Cref{sec:byzantine-new-channels}).
+
+
+% \subsection{Indistinguishability between new and old Byzantine machines}
+% \label{sec:new-machines-fault-tolerance}
+% \jmh{I'd put the claims of this subsection higher up, by the Borgesian Construction. It's key to the whole argument of Section 3 to believe in this indistinguishability. And as Natacha says, maybe proofs go in the appendix.}
+
+% We argue that a non-Byzantine machine cannot distinguish between a Byzantine machine $m$ and a Byzantine machine $m_i$, where $m_i$ is decoupled or partitioned from $m$.
+% We will first show that new and old Byzantine machines are equally powerful, then show that the number of failures in the system appears unchanged to all correct machines.
+
+
+% \subsubsection{Equivalent expressivity}
+% \label{sec:equivalent-expressivity}
+% Two Byzantine machines have the same expressivity if the set of messages they can output is the same.
+% Old and new Byzantine machines contain the same logic as defined in \Cref{sec:bft-formalism}; what separates them is the set of input channels in the original and rewritten protocol.
+% Because the rewrites modify and create new input channels, a new Byzantine machine that creates messages for (or forwards messages from) these input channels would be more powerful.
+% In this section, we will show that on input channels that are \emph{untouched by the rewrites}, any message sent by a new Byzantine machine either could have been sent by an old Byzantine machine or would be discarded by any non-Byzantine machine. \jmh{I would name the "either" and "or" cases here, because you appeal to this reasoning as early as 3.2.  Either: "Possible". Or: "Trivial"?}
+% We will discuss messages to modified and newly created channels in \Cref{sec:byzantine-new-channels}, since the message types may have changed and we can no longer argue indistinguishability.
+
+
+% \david{Proof if there is no forwarding.}
+% For plaintext and signed message channels without forwarding, because all fields are generated randomly and the set of keys available to Byzantine machines are the same, any message generated by a new Byzantine machine could have been generated by an old one. \jmh{Every message is "Possible", in the terminology I suggested above.}
+
+% \david{Proof if there is forwarding.}
+% Now consider signed or nested type message channels where some parts of the message is forwarded (signed with the key of another machine).
+% If the key belongs to another Byzantine machine, then the same message could have been generated locally without forwarding, and our argument above \jmh{which argument above?} holds.
+% If the key belongs to a correct machine, that machine must have sent a message $m$ to some Byzantine machine $l^1$, which forwarded the message along a chain of Byzantine machines until it arrived at Byzantine machine $l^i$, which then sent a message including the signature and protected fields from $m$.
+% Note that the forwarding chain can be of length zero such that $l^1 = l^i$, to represent no inter-machine forwarding; it can also contain multiple instances of the same machine.
+
+% \david{Conversion of run over rewritten protocol to run over original protocol.}
+% We will show that this run is possible in the original protocol as well.
+% We can ``undo'' the rewrites by replacing all new Byzantine machines with their corresponding old Byzantine machine: for example, partitions $l_1, l_2, \ldots$ created from machine $l$ are replaced with $l$.
+% The union of the received messages \texttt{msg\_store} in the new Byzantine machines \jmh{this is a bit confusing; might be nice to have subscripts on the local \texttt{msg\_store}s and then write down the union ast a $\bigcup_i$} then becomes the \texttt{msg\_store} of the corresponding old Byzantine machine.
+% Therefore, any message that the new Byzantine machine can forward could have been forwarded by an old Byzantine machine as well.
+
+% \david{Address nested messages that include new message types.}
+% One wrinkle in the argument above is that the correct machine may send messages meant for new or modified channels that it would not have sent in the original protocol.
+% These messages may then be nested into another message by a Byzantine machine and delivered to a preexisting message channel on a correct machine, if the typing is valid.
+% This can be avoided by including the message type as part of the message signature that is verified by the recipient, so any incorrect message nesting or mismatch between the intended and actual input channels results in an invalid signature.
+% % \chris{Does the message have to be necessarily nested into another message? Could this issue also exist if Byzantine machines also directly forward messages from correct machines meant for new/modified channels to an existing input channel elsewhere (assuming the typing is valid)? I imagine the solution would remain the same for this case too}
+% \jmh{Things begin to feel like case-based reasoning here, which could be incomplete. What is the space of all possible things that could go wrong on new/modified channels? How can I be convinced that you've covered that space?}
+% \jmh{Also I'm surprised you didn't need to talk about "Trivial" messages (in the terminology I suggested above).}
+% \jmh{Oh wait, now I see you'll have a subsection on new/modified channels. Then why was this "wrinkle" here?}
+
+
+% \subsubsection{Equivalent number of failures}
+% \label{sec:equivalent-number-of-failures}
+% The decoupling or partitioning of a machine $l$ into many corresponding machines $l_1, l_2, \ldots$ does not increase the number of failures in the system.
+% As described in \sigmodpaper{}, the failure of any machine $l_i$ can be treated as a failure of $l$.
+% Each set of machines $l_i$ can be grouped into the same failure domain (that originally consisted of only $l$), so the rewrites increase the number of machines in each domain but not the number of possibly faulty domains. \chris{I think we should briefly justify a bit why the logic used for crash faults in Chu et al. can be applied to Byzantine faults, since this is a pretty important point}
+
+
+
+% \subsection{Modified channels enforce new invariants}
+% \label{sec:byzantine-new-channels}
+% Having shown that new Byzantine machines are not more powerful when it comes to sending messages to unmodified channels, we must now show that new or modified channels are resilient to Byzantine messages.
+% These modified channels have implicit invariants on the messages that they can receive, which are encoded by the rewrites on the ``senders''---the machines that send messages to these channels.
+% A Byzantine sender can choose to break the invariant, as was done in the example of \Cref{sec:intro}. \david{If we make a figure, reference that instead.}
+
+% The new and modified channels' invariants can be grouped into two categories:
+% Internal routing (\Cref{sec:internal-routing}), and
+% External routing (\Cref{sec:external-routing}).
+
+
+% \subsubsection{Internal routing}
+% \label{sec:internal-routing}
+% Let $l_1, l_2, \ldots$ be machines that were decoupled or partitioned from some machine $l$.
+% An input channel of $l_i$ relies on \emph{internal routing} if it only expects messages from other $l_j$.
+% This type of channel modification can be found in monotonic decoupling, functional decoupling, asymmetric decoupling, and partial partitioning~\cite{autocomp}.
+
+% A Byzantine machine $l_j$ can send arbitrary messages to this channel and trigger unwanted behaviors, but because $l_i$ and $l_j$ both correspond to the same original machine, this is equivalent to the original machine $l$ failing. \jmh{By "failing" do you mean "behaving in a Byzantine manner"? The effect of this "failure" could be for $l_i$ to behave in any way...}
+
+% A Byzantine machine $l'$ can send arbitrary messages to this channel \jmh{which channel?} as well.
+% We modify $l_i$ such that internally routed messages are signed, such that if all $l_i$ are correct, then no Byzantine machine can create a valid message.
+% We assume that \texttt{internal\_key($l_i$)} returns a symmetric key shared only between the machines in $l_i$.
+
+% \textbf{Rewrite: Internal routing verification.}
+% For each new or modified input channel \texttt{in($\ldots$)} on $l_i$ that relies on internal routing, we replace it with the input channel \texttt{signed\_in($\ldots$, sig)} with the following rewrites:
+
+% \begin{algorithm}
+% \caption{Sender rewrites for internal routing}
+% k $\gets$ internal\_key(l)\;
+% sig $\gets$ sign$(k, \ldots)$\;
+% signed\_in@$l_i \leftsquigarrow$ ($\ldots$, sig)
+% \end{algorithm}
+
+% \begin{algorithm}
+% \caption{Receiver rewrites for internal routing}
+% k $\gets$ internal\_key(l)\;
+% \For{$m \in$ signed\_in($\ldots$, sig)}{
+%     \If{verify(k, m.sig, m.$\ldots$)}{
+%         in($\ldots$) $\gets$ m.$\ldots$
+%     }
+% }
+% \end{algorithm}
+
+
+% \subsubsection{External routing}
+% \label{sec:external-routing}
+% An input channel of $l_i$ replies on external routing if it expects messages from other machines $l'$. \jmh{I don't know what "reply" or "external routing" really mean---what are "machines $l'$"?}
+
+% \david{Decoupling.}
+% Decoupling splits logic on a single original machine $l$ onto two machines $l_1$ and $l_2$.
+% After decoupling, any input channel on $l$ will become an input channel of either $l_1$ or $l_2$, and any machine that sent messages to $l$ would reroute the message to either $l_1$ or $l_2$.
+% A Byzantine machine can misbehave by rerouting to the wrong machine.
+% Incorrectly rerouted messages will be dropped, as the input channel only exists on one machine.
+% Therefore no additional rewrites are necessary for input channels modified by decoupling.
+
+% \david{Partitioning.}
+% Partitioning splits data on a single original machine $l$ onto multiple machines $l_1, l_2, \ldots$ with the same logic.
+% After partitioning, any input channel on $l$ will become an input channel on \emph{all} partitions $l_1, l_2, \ldots$, and any machine that sent messages to $l$ would have to reroute the message to the correct partition, depending on the output of the partitioning function $D(m)$ on the message $m$.
+% A Byzantine machine can misbehave by rerouting or duplicating messages to the wrong partition(s). \david{Reference example in intro?}
+% Because the rewrites were introduced assuming no Byzantine failures, partitions did not check whether the messages they received were redirected correctly.
+% We introduce the following modification to the partitioning rewrites to verify that incorrectly routed messages are discarded.
+
+% \textbf{Rewrite: Partitioning verification.}
+% For each input channel \texttt{in(...)} on partition $l_i$ with index $i$, we replace all instances of \texttt{in(...)} in $l_i$ with \texttt{in\_correct(...)} and add the following logic:
+% \begin{algorithm}
+% \caption{Partitioning verification rewrites}
+% \For{m $\in$ in(...)}{
+%     \If{$D(m) = i$}{
+%         in\_correct $\gets$ m
+%     }
+% }
+% \end{algorithm}

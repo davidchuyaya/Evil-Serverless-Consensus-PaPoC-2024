@@ -1,22 +1,115 @@
 \section{Background}
 \label{sec:background}
-\textbf{Rule-driven rewrites.}
-\sigmodpaper{} presents a set of rule-driven rewrites that can be applied to arbitrary distributed protocols if the preconditions are met.
-Rewrites improve protocol throughput by scaling up, spreading the logic or data of an individual machine $m$ across multiple machines $m_1, m_2, \ldots$ through decoupling and partitioning, respectively.
-When a machine $m$ is scaled up in this way, new input channels may be introduced between its new machines $m_i$ in order to transfer data, and machines that previously sent messages to $m$ may need to forward messages to a specific machine in $m_i$ or duplicate the message to all machines $\overline{m_i}$.
-
-\sigmodpaper{} proved the correctness of the rewrites over Dedalus~\cite{dedalus}, a declarative dataflow language for distributed systems based on Datalog.
-Due to limited space, we will instead discuss rewrites over event-driven pseudocode instead.
 
 \textbf{BFT.}
-BFT protocols can tolerate up to $f$ Byzantine failures, where Byzantine machines can send arbitrary messages and share private keys, although they cannot break cryptography~\cite{pbft}.
-We assume a shared-nothing architecture in which machines can only communicate through messages, and messages between correct machines will eventually be delivered.
-Note that this paper is focused on proving the correctness of \emph{rewrites} across BFT protocols, not the correctness of any specific BFT protocol.
-We will use PBFT~\cite{pbft}, a foundational BFT protocol, as a case study in our proofs.
+BFT protocols can tolerate up to $f$ node failures, where failed nodes can exhibit Byzantine behavior. 
+% \tyler{node failures, where failed nodes can exhibit Byzantine behavior. Byzantine nodes can send arbitrary...} 
+Byzantine nodes can send arbitrary messages and share private keys. They cannot, however, break standard cryptographic primitives~\cite{pbft}.
+We assume a shared-nothing architecture in which nodes can only communicate through messages.
+Messages between correct nodes will eventually be delivered.
 
-\textbf{Correctness.}
-Correctness is defined by the observable program behavior.
-A rewrite is correct if given any program $P$, a rewritten program $P'$, and any set of inputs (and their respective send times), $P'$ always generates the same outputs with the same timestamps as some possible run of $P$~\cite{autocomp}.
+\textbf{Rule-driven rewrites.}
+\sigmodpaper{} presents a set of rule-driven rewrites that can be applied to arbitrary distributed protocols implemented in Dedalus~\cite{dedalus}, a declarative dataflow language for distributed systems based on Datalog.
+Due to limited space, we will instead discuss these rewrites in the context of event-driven pseudocode instead.
 
-% Note that the fault tolerance of a protocol does not change as a result of scaling up.
-% The Byzantine failure of any new machine $m_i$ is equivalent to the failure of the original machine $m$. \chris{This part may need more elaboration since it might not be immediately obvious to new readers, or we should at least mention again that we will prove this later}
+\david{What the rewrites are.}
+Rewrites improve protocol throughput by \emph{decoupling} and \emph{partitioning}~\cite{compartmentalized}.
+Decoupling splits \emph{logic} on a single node $l$ into two nodes $l_1$ and $l_2$.
+Partitioning splits \emph{data} on a single node $l$ into multiple new nodes $\overline{l} = \{l_1, l_2, \ldots\}$.
+Both rewrites alleviate single-node bottlenecks by introducing pipeline- and data- parallelism, respectively~\cite{autocomp}.
+We say that these new nodes $l_1, l_2, \ldots$ \textbf{correspond} to $l$.
+
+\david{Vulnerability in the rewrites.}
+Naively decoupling and partitioning can make a protocol that was previously fault tolerant vulnerable to Byzantine attacks.
+The rewrites can (1) create new nodes and introduce message channels between them, in order to enable pipelining or coordination, and (2) modify existing message channels so messages to a single node must be forwarded to its correct corresponding nodes.
+% \natacha{Remind the reader why that's a problem?}.
+New message channels present exploitable opportunities to Byzantine nodes, which can send arbitrary messages to those channels.
+% \natacha{given below you have to add predicates like isByzantine, it would be super helpful to have a mini pseudocode example here to make the rest of the section easier to undertand. I would say that this is more important (to me) than the figure with the CRDT}
+
+
+\subsection{Running example and syntax}
+\label{sec:syntax}
+We will use \Cref{alg:running-example} as a case study in our rewrites.
+% \heidi{but our approach could equally be applied to example x, Y and Z}
+
+\david{Introduce running example}
+This snippet of PBFT~\cite{pbft} collects \textsc{Prepare} messages, waits for a quorum, then broadcasts a \textsc{Commit} message, representing a common pattern that can be found in many other BFT protocols.
+\textsc{Prepare} messages arrive on the \texttt{prepareIn} channel and \textsc{Commit} messages are sent on the \texttt{commitOut} channel.
+We will use the syntax \texttt{commitOut@dest $\leftsquigarrow m$} to indicate sending a message $m$ to node \texttt{dest} on channel \texttt{commitOut}.
+The address of each node is stored in the variable \texttt{self}, and the addresses of all nodes is stored in \texttt{allNodes}.
+
+Each \textsc{prepare} message has the following fields: view $v$, slot number $n$, digest $d$ of a command, sender index $i$, and signature $\sigma$.
+Each \textsc{Prepare} message is first filtered based on its signature and view (\Cref{alg:running-example-verify}), then added to the log (\Cref{alg:running-example-add-to-log}).
+Once $2f+1$ \textsc{Prepare} messages have been received for a particular slot number and digest (\Cref{alg:running-example-quorum}), a \textsc{Commit} message is signed and broadcasted to all other nodes (\Cref{alg:running-example-sign,alg:running-example-broadcast}).
+
+\david{Signatures.}
+Nodes have access to the cryptographic functions \texttt{sign(sk, m)} and \texttt{verify(pk, $\sigma$, m)}.
+\texttt{sign(sk, m)} returns the signature $\sigma$ for a secret key $sk$ and message $m$.
+\texttt{verify(pk, $\sigma$, m)} returns true if $\sigma$ is the signature of the secret key $sk$ corresponding to the public key $pk$ over $m$; it returns false otherwise.
+Keys are available to each node through the maps \texttt{skeys} and \texttt{pkeys}; for each node at location $l$, \texttt{skeys[$l'$]} and \texttt{pkeys[$l'$]} returns the secret and public keys used to sign and verify messages from $l$ to $l'$, respectively.
+
+% \david{Simplifications from PBFT.}
+% For simplicity, this snippet differs from PBFT in the following ways:
+% (1) A quorum is $2f+1$ \textsc{Prepare}s instead of $2f$ \textsc{Prepare}s and 1 \textsc{Pre-Prepare}.
+% \natacha{please don't mention this. You're just going to confuse people and you're not changing anything}
+% (2) The signature consists of a single MAC for a specific receiver to verify, as opposed to an array of MACs (an \emph{authenticator}~\cite{pbft}) that can be verified by any node.
+% \natacha{Are you talking about macs or signatures, they are not the same thing. You have a single signature or n macs. What  are you signing?}
+
+\david{Equivalence between MACs and signatures.}
+We treat the signature schemes commonly used by BFT protocols---MACs (Message Authentication Codes)~\cite{MAC} and public-key signatures~\cite{signature}---as black boxes and do not distinguish between them in our formalism.
+Both produce a signature that can be verified with the correct key; this key is symmetric for MACs and asymmetric for public-key signatures.
+
+\david{Make clear which keys are available to which nodes for MACs and public-key signatures.}
+In our formalism, we will store all keys, symmetric or asymmetric, in \texttt{skeys} and \texttt{pkeys}, and sign and verify them with the same syntax.
+Any symmetric key $k$ used between nodes $l$ and $l'$ is \emph{only} available to those two nodes: $k=$ \texttt{skeys[$l'$]} $=$ \texttt{pkeys[$l'$]} on $l$, and $k=$ \texttt{skeys[$l$]} $=$ \texttt{pkeys[$l$]} on $l'$.
+The availability of asymmetric keys is asymmetric.
+A node $l$ signs all its outgoing messages with $sk$, which is known to no other node, but all nodes know its public key $pk$: for any $l'$, $sk=$ \texttt{skeys[$l'$]} on $l$, and on any $l'$, $pk=$ \texttt{pkeys[$l$]}.
+% (true if \texttt{sk = pk} for MACs, and true if \texttt{sk} is the secret key corresponding to \texttt{pk} for public-key signatures)
+
+
+\begin{algorithm}
+\caption{The running example from PBFT.}
+\label{alg:running-example}
+prepareLog = \{\}\;
+numPrepares[][] = \{\}\;
+
+\For{msg $\in$ prepareIn(v, n, d, i, $\sigma$)}{
+    \If{verify(pkeys[i], $\sigma$, <v, n, d>) \And v = view}{ \label{alg:running-example-verify}
+        prepareLog.add(msg)\; \label{alg:running-example-add-to-log}
+        numPrepares[n][d] += 1\;
+
+        \If{numPrepares[n][d] $\ge 2f+1$}{ \label{alg:running-example-quorum}
+            \For{dest $\in$ allNodes}{
+                $\sigma' \gets$ sign(skeys[dest], <v, n, d, self>)\; \label{alg:running-example-sign}
+                commitOut@dest $\leftsquigarrow$ (v, n, d, self, $\sigma'$) \label{alg:running-example-broadcast}
+            }
+        }
+    }
+}
+\end{algorithm}
+
+% \heidi{You can save space in all the pseudo code by removing the "end"s. The indentation is enough to make the flow control clear (python style)}
+
+
+\subsection{Correctness}
+\label{sec:correctness}
+
+This paper is focused on proving the correctness of \emph{rewrites} across BFT protocols, not the correctness of any specific BFT protocol.
+Assuming that the original distributed protocol is correct in the presence of $f$ Byzantine failures, the modified rewrites will decouple and partition the protocol while preserving correctness up to $f$ Byzantine failures.
+% \heidi{I think you want to be even more explicit here, we assume that the original distributed protocol is correct in the presence of f byz failures. Our transformations will decouple and partition the protocol across more nodes to improve performance whilst preserving the correctness in the presence of f faults.}
+
+\david{Fault domains.}
+We discuss failures in the rewritten protocol in terms of \emph{fault domains}.
+Each node $l$ in the original protocol belongs to its own fault domain; when $l$ is scaled up into its corresponding nodes $\overline{l}$, all nodes in $\overline{l}$ remain in the same fault domain.
+Therefore, the failure of \emph{any} node in $\overline{l}$ is equivalent to the failures of \emph{all} nodes in $\overline{l}$, which is equivalent to the failure $l$, and the rewrites do not change the number of fault domains.
+
+Intuitively, to any observer, the output of all nodes $\overline{l}$ together represents the output of the corresponding original node $l$.
+A ``partially'' Byzantine node is still Byzantine: if any single node $l_i \in \overline{l}$ becomes Byzantine while the remaining corresponding nodes are still correct, it is as if the original node $l$ becomes Byzantine but continues to send \textit{some} correct messages.
+% \david{Joe and Natacha: Worth a sentence justifying fault domains because of the cloud, nodes are managed by entities.}
+
+\david{Definition of correctness.}
+Correctness is defined by observable program behavior.
+A rewrite is correct if given any program $P$, a rewritten program $P'$, and any set of inputs (and their respective send times), $P'$ always generates the same outputs with the same timestamps as some possible run of $P$ with up to $f$ Byzantine failures~\cite{autocomp}.
+% \nc{Is it worth saying again that in this case, a possible run of P includes byz behaviour from up to f machines?}
+
+

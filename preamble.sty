@@ -4,8 +4,8 @@
 % Package list. Please add packages alphabetically with a quick note
 % of what they do
 % ================================================
-% \usepackage[ruled,linesnumbered]{algorithm2e}
-\usepackage[noend]{algpseudocode}
+\usepackage[ruled,linesnumbered,noend]{algorithm2e}
+% \usepackage[noend]{algpseudocode} % Clashes with algorithm2e. See https://tex.stackexchange.com/a/230789/237320
 \usepackage{amsthm}
 \usepackage{amsmath}
 % \usepackage{amssymb} % Clashes with definition in acmart.cls. See https://tex.stackexchange.com/questions/564490/command-bbbk-already-defined-ol-bbbk-mathordamsb7c-when-i-try-t
@@ -86,8 +86,8 @@
 
 % Default values
 \setboolean{tr}{false}
-\setboolean{publicversion}{false}
-\setboolean{compress}{false}
+\setboolean{publicversion}{true}
+\setboolean{compress}{true}
 \setboolean{optanon}{false}
 \setboolean{usenix}{false}
 \setboolean{acm}{true}
@@ -152,6 +152,7 @@
     \newcommand{\nc}[1]{}
     \newcommand{\heidi}[1]{}
     \newcommand{\chris}[1]{}
+    \newcommand{\tyler}[1]{}
 } 
 {
   \newcommand{\grumbler}[2]{{{\bf #1:} #2}}
@@ -165,6 +166,7 @@
     \newcommand{\nc}[1]{{\color{blue}\grumbler{Natacha}{#1}}}
     \newcommand{\heidi}[1]{{\color{gold}\grumbler{Heidi}{#1}}}
     \newcommand{\chris}[1]{{\color{mint}\grumbler{Chris}{#1}}}
+    \newcommand{\tyler}[1]{{\color{purple}\grumbler{Tyler}{#1}}}
 }
 
 % ================================================
@@ -262,6 +264,10 @@
 % System names
 % ================================================
 \newcommand{\sigmodpaper}{Chu et al.}
+\newcommand{\randomSimulator}{Borgesian simulator}
+\newcommand{\randomHarness}{Borgesian harness}
+\newcommand{\BasePBFT}{BasePBFT}
+\newcommand{\ScalablePBFT}{ScalablePBFT}
 
 % Listings for Dedalus
 % ================================================
@@ -316,3 +322,17 @@
 % Tikz pictures
 % ================================================
 \usetikzlibrary{positioning, shapes.geometric, fit}
+\usetikzlibrary{backgrounds}
+\pgfdeclarelayer{bg}
+\pgfsetlayers{bg,main}
+\usetikzlibrary{arrows.meta}
+\usetikzlibrary{calc}
+% \tikzset{
+%   font={\fontsize{7pt}{12}\selectfont}}
+
+
+% Algorithm2e
+% ================================================
+\SetKwData{And}{\textbf{and}}
+\DontPrintSemicolon
+\SetInd{0.5em}{0.5em} % Control tab size

@@ -15,47 +15,52 @@
 \usepackage{preamble}
 
 \begin{document}
-\title{Bigger, not Badder: Safety of Scaling Byzantine Protocols}
+\title{Bigger, not Badder: Safely Scaling BFT Protocols}
 
-\author{David C. Y. Chu}
-\orcid{0000-0001-9922-1994}
+\author{David C. Y. Chu, Chris Liu, Natacha Crooks, Joseph M. Hellerstein, Heidi Howard$^\dagger$}
 \affiliation{
-    \institution{University of California, Berkeley}
-    \country{USA}
+    \institution{UC Berkeley, Azure Research$^\dagger$}
+    \country{}
 }
-\email{thedavidchu@berkeley.edu}
+% \author{David C. Y. Chu}
+% \orcid{0000-0001-9922-1994}
+% \affiliation{
+%     \institution{University of California, Berkeley}
+%     \country{USA}
+% }
+% \email{thedavidchu@berkeley.edu}
 
-\author{Chris Liu}
-\orcid{0009-0002-1880-1941}
-\affiliation{
-    \institution{University of California, Berkeley}
-    \country{USA}
-}
-\email{chris-liu@berkeley.edu}
+% \author{Chris Liu}
+% \orcid{0009-0002-1880-1941}
+% \affiliation{
+%     \institution{University of California, Berkeley}
+%     \country{USA}
+% }
+% \email{chris-liu@berkeley.edu}
 
-\author{Natacha Crooks}
-\orcid{0000-0002-3567-801X}
-\affiliation{
-    \institution{University of California, Berkeley}
-    \country{USA}
-}
-\email{ncrooks@berkeley.edu}
+% \author{Natacha Crooks}
+% \orcid{0000-0002-3567-801X}
+% \affiliation{
+%     \institution{University of California, Berkeley}
+%     \country{USA}
+% }
+% \email{ncrooks@berkeley.edu}
 
-\author{Joseph M. Hellerstein}
-\orcid{0000-0002-7712-4306}
-\affiliation{
-    \institution{University of California, Berkeley}
-    \country{USA}
-}
-\email{hellerstein@berkeley.edu}
+% \author{Joseph M. Hellerstein}
+% \orcid{0000-0002-7712-4306}
+% \affiliation{
+%     \institution{University of California, Berkeley}
+%     \country{USA}
+% }
+% \email{hellerstein@berkeley.edu}
 
-\author{Heidi Howard}
-\orcid{0000-0001-5256-7664}
-\affiliation{
-    \institution{Azure Research, Microsoft}
-    \country{UK}
-}
-\email{heidi.howard@microsoft.com}
+% \author{Heidi Howard}
+% \orcid{0000-0001-5256-7664}
+% \affiliation{
+%     \institution{Azure Research, Microsoft}
+%     \country{UK}
+% }
+% \email{heidi.howard@microsoft.com}
 
 \input{0-abstract}
 \maketitle
@@ -64,7 +69,9 @@
 \input{1-intro}
 \input{2-background}
 \input{3-bft-formalism}
-\input{4-proofs}
+\input{4-rewrites}
+\input{5-proofs}
+\input{6-eval}
 
 \bibliographystyle{ACM-Reference-Format}
 {\footnotesize
