@@ -15,7 +15,9 @@ We name this random message generator the \textbf{\randomSimulator{}}.
 This simulator can generate both nonsensical and seemingly intelligent outputs, all of which must be correctly handled by a BFT protocol.
 % Although BFT protocols often prove correctness against a malicious adversary, they must be safe against arbitrary attacks; indeed, recent work suggests that correct nodes with random state and message permutations can appear Byzantine and help expose bugs in BFT protocol implementations~\cite{twins}. \natacha{Don't understand the last sentence, what are you trying to say?}
 We will formalize the \randomSimulator{} by attaching a \textbf{\randomHarness{}} to all nodes in a BFT protocol.
-Note that this harness allows us to \emph{simulate} the possible behaviors of a Byzantine node and is \emph{not} meant to be applied in practice or used as a fuzz tester.
+Note that this harness defines what a protocol must defend against 
+% \jmh{rather than ``allows us to simulate'' how about ``requires a protocol to defend against''} 
+and is \emph{not} meant to be applied in practice or used as a fuzz tester.
 
 % A formal specification of the expressivity of Byzantine machines is necessary in order to prove the correctness of rewrites in a Byzantine setting.
 % \natacha{I'm not a big fan of the phrasing "specification of expressivity". We we say instead: W To prove the correctness of rewrites in a Byz setting, we must first formally model the fact that Byz nodes can deviate from the protocol arbirarily, send arbitrary messages (1), without breaking cryptographic primitives (2). We address each in turn.}
@@ -42,7 +44,9 @@ Note that this harness allows us to \emph{simulate} the possible behaviors of a 
 \label{sec:plaintext-channels-formalism}
 % Plaintext message channels accept all messages with no cryptographic guarantees.
 % Therefore, any Byzantine machine should be allowed to send messages with arbitrary content to these channels.
-In the simplest case, given a plaintext message channel on any node, a Byzantine node should be able to send an arbitrary number of messages to that channel.
+In the simplest case, given a plaintext message channel on any node, a node simulating Byzantine behavior should be able
+% \jmh{a bit confusing; how about "a node simulating Byzantine behavior must exhibit runs in which it sends..."}
+to send an arbitrary number of messages to that channel.
 
 \david{Modify running example.}
 \Cref{alg:running-example-plaintext-harness} is our running example with this harness applied: it executes the original logic if it is not Byzantine, and sends a random number of random messages to \texttt{commitOut} at each moment in time if it is.
@@ -84,7 +88,9 @@ Observe that a Byzantine node with the \randomHarness{} can also behave like a n
 \label{sec:signed-channels-formalism}
 
 Our \randomHarness{} up to this point is flawed: by using \texttt{rand()} to populate the ``signature'' field in \Cref{alg:running-example-plaintext-harness} \Cref{line:running-example-plaintext-harness-out-channel}, the \randomSimulator{} is allowed to break cryptography, mimicking the signatures of keys it does not have access to.
-In order to limit the Byzantine behaviors of the \randomSimulator{}, we separate message fields into three types:
+To model practical assumptions, we would like to forbid the \randomSimulator{} from randomly emitting messages that break cryptography.
+% \jmh{To model practical assumptions, We would like to deterministically forbid our \randomHarness{} from randomly emitting messages that break cryptography. To this end, we separate...}
+To this end, we separate message fields into three types:
 (1) unprotected fields,
 (2) protected fields, and
 (3) signatures created by signing over the protected fields.
@@ -97,7 +103,7 @@ A \randomSimulator{} should only generate signatures by signing the protected fi
 \Cref{alg:running-example-signed-harness} is our running example, with the new \randomHarness{} that generates the signature of messages on \texttt{commitOut} using the keys available to it.
 Note that all fields of \texttt{commitOut} are protected.
 In the psuedocode, \texttt{allSkeys} is a mapping from nodes to their \texttt{skeys} array, which allows a Byzantine node to access the keys of all other Byzantine nodes.
-In general, the \randomHarness{} must differentiate between plaintext and signed message channels: on signed channels, it must generate a valid signature by signing over the messages' protected fields using keys it has access to.
+In general, the \randomHarness{} must differentiate between plaintext and signed message channels: on signed channels, it must generate a valid signature by using the keys it has to sign the messages' protected fields.
 
 \begin{algorithm}[t]
 \caption{The running example with the signed message channel \randomHarness{}.}
@@ -131,7 +137,9 @@ The \randomSimulator{} does not need to generate messages with incorrect signatu
 \label{sec:forwarding}
 
 Although Byzantine nodes can only sign new messages using their keys, they can still \emph{forward} along messages signed by other nodes as long as they do not alter the protected fields.
-This is where their internal state becomes relevant: because Byzantine nodes cannot forge the signatures of correct nodes, a Byzantine node that has received more messages signed by correct nodes can generate more messages.
+% \jmh{this next sentence seems overwritten to me. Doesn't it just say "A Byzantine node can keep any previously-received signed message in internal state and forward it." And didn't you just say that in the previous sentence? What nuance is added in the next sentence?}
+% This is where their internal state becomes relevant: 
+% because Byzantine nodes cannot forge the signatures of correct nodes, a Byzantine node that has received more messages signed by correct nodes can generate more messages.
 We will modify the \randomHarness{} such that it takes previously received messages into consideration.
 % We formalize this by allowing Byzantine machines to store signed messages they have received in a data structure \texttt{msg\_store($u_1,u_2,\ldots,p_1,p_2,\ldots,sig$)} and randomly send messages in this data structure to other machines.
 % \david{Technically, Byzantine machines can lie about being at different locations and therefore share messages faster than actual message passing. We can formalize this in Dedalus by creating synchronous channels between Byzantine machines. Should I mention it?} \chris{I think it's worth recognizing this as a side comment, but would the Dedalus formalism be relevant here?}
@@ -166,8 +174,8 @@ We will modify the \randomHarness{} such that it takes previously received messa
 }
 \end{algorithm}
 
-\david{Generalize.}
-In general, a \randomSimulator{} can forward every message that it receives, under the condition that the protected fields and signatures are unchanged.
+% \david{Generalize.}
+% In general, a \randomSimulator{} can forward every message that it receives, under the condition that the protected fields and signatures are unchanged. \jmh{Isn't this the first sentence of the subsection all over again? In general I think this whole section can be boiled down to about 2 lines of prose that say roughly "A Byzantine node can remember and forward messages, so we add this to our simulator."}
 
 % \natacha{where did the conversation about signatures (and transferrable authentication) vs MAC go? } \david{It's at the end of \Cref{sec:syntax}.}
 

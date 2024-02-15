@@ -5,7 +5,8 @@ We now present two modifications to the rewrites introduced by \sigmodpaper{}: s
 
 \subsection{Sender verification}
 \label{sec:sender-verification}
-The rewrites can introduce new nodes with message channels between them, with the implicit assumption that no other nodes send messages to these channels.\footnote{Rewrites that fall into this category include monotonic decoupling, functional decoupling, asymmetric decoupling, and partial partitioning~\cite{autocomp}.}
+% \jmh{Let's use parallel language to 4.2: "The rewrites introduce new channels, with implicit assumptions about which nodes will send on those channels."}
+The rewrites introduce new channels, with implicit assumptions about which nodes will send on those channels.\footnote{Rewrites that fall into this category include monotonic decoupling, functional decoupling, asymmetric decoupling, and partial partitioning~\cite{autocomp}.}
 % \heidi{this sentence might be good as a footnote. atm it might not contribute anything to readers who are unfamiliar with the other paper}
 Without additional verification, these channels would be vulnerable to Byzantine attacks from other nodes.
 
@@ -13,7 +14,8 @@ Without additional verification, these channels would be vulnerable to Byzantine
 Replace each new channel \texttt{chan(m)} from node $l_1$ to $l_2$ with \texttt{signed\_chan(m, $\sigma$)}, where $\sigma =$ \texttt{sign(skeys[$l_2$], m)}.
 The receiving node $l_2$ only processes a message $m$ if \texttt{verify(pkeys[$l_1$], $\sigma$, m)} returns true.
 
-As an optimization, if functional dependencies~\cite{autocomp,alice} are known, then the sender does not necessary have to sign all fields of the message.
+\jmh{This feels like a minor point -- could be cut if space is an issue. The only thing I like about it is that it captures what PBFT is doing in a more general way.}
+As an optimization, if functional dependencies~\cite{autocomp,alice} are known, then the sender does not have to sign all fields of the message.
 If there is a functional dependency from message field $x$ to $y$---that is, there is some deterministic function $f$ where $f(x) = y$---then signing over $x$ is sufficient.
 If there is a one-to-one dependency between the fields---there exists some $f^{-1}(y) = x$---then signing over \emph{either} field is sufficient.
 This optimization applies to any BFT protocol that uses collision-resistant hash functions (such as PBFT), where there is a one-to-one dependency between the hash digest and the original message.
@@ -46,12 +48,13 @@ Note that the inverse of the hash function does not need to be known; this optim
 \subsection{Message verification}
 \label{sec:message-verification}
 
-The rewrites also introduce channels with implicit assumptions on message content.
+The partitioning rewrites also introduce channels with implicit assumptions on message content.
 Nodes created through partitioning all share the same types of input channels, but each partition assumes that it will receive a specific disjoint subset of the messages.\footnote{All subcategories of partitioning in~\cite{autocomp}---partitioning with co-hashing, partitioning with dependencies, and partial partitioning---share this assumption.}
 Byzantine nodes can exploit this assumption and send messages to the wrong nodes.
 
 \textbf{Modification: Message verification.}
-For each input channel \texttt{chan(m)} on partition $l_i$, replace all instances of \texttt{chan(m)} with \texttt{correct\_chan(m)}, which contains the subset of messages in \texttt{chan(m)} that are meant for this partition.
+\jmh{perhaps index with the partition index $i$? e.g. \texttt{correct\_chan(m, i)}? Or add a filter function \texttt{destination\_filter(chan(m), i)}?}
+For each input channel \texttt{chan(m)} on partition $l_i$, replace all instances of \texttt{chan(m)} with \texttt{correct\_chan(m)}, which drops any messages from \texttt{chan(m)} that are not meant for this partition.
 This criteria can be checked with the distribution policy function $D(m)$ as defined in~\cite{autocomp}, which maps each message to its intended partition.
 
 % , as seen in \Cref{alg:message-verification}.

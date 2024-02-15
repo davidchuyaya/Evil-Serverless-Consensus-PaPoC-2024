@@ -314,10 +314,10 @@ Our experimental scripts and setup can be found at \url{https://github.com/rithv
 \david{Experimental setup.}
 Our evaluation mirrors the evaluation from \sigmodpaper{}
 PBFT is implemented in Dedalus~\cite{dedalus} and compiled to Hydroflow~\cite{hydroflow}, a Rust dataflow runtime for distributed systems.
-We use SHA-256 to generate MACs and digests instead of md5 (as described in PBFT) due to known exploits on md5~\cite{breakMD5}.
+% We use SHA-256 to generate MACs and digests instead of md5 (as described in PBFT) due to known exploits on md5~\cite{breakMD5}.
 We deploy on GCP using n2-standard-4 machines with 4 vCPUs, 16 GB RAM, and 10 Gbps network bandwidth.
 Throughput and latency are measured over one minute runs after 30 seconds of warmup.
-Clients send 16 byte, unbatched, commands in a closed loop.
+Clients send 16 byte unbatched commands in a closed loop.
 The state machines, clients, and protocol nodes are all run on separate machines.
 Performance is measured with an increasing set of clients until throughput saturates, averaging across 3 runs with standard deviations in shaded regions.
 
@@ -338,7 +338,7 @@ Our deployments tolerate $f=1$ failures.
 The base deployment contains $3f+1 = 4$ nodes.
 Clients send messages to a pre-elected primary, which sequences the command and broadcasts \textsc{PrePrepare}s (including both the command and its signed digest).
 Replicas that receive \textsc{PrePrepare}s broadcast \textsc{Prepare} (now only including the command's digest).
-Replicas that receive $2f+1$ \textsc{Prepare}s broadcast a \textsc{Commit}, as seen in \Cref{alg:running-example}.
+Replicas that receive $2f+1$ \textsc{Prepare}s broadcast a \textsc{Commit}.
 Replicas that receive $2f+1$ \textsc{Commit}s find their matching \textsc{PrePrepare} from earlier and send the command and its sequence number to its state machine, which executes the command and notifies the client.
 The client waits for $f+1$ state machine results before sending the next message.
 \BasePBFT{} achieves a maximum throughput of 11,000 commands/s.
@@ -356,10 +356,11 @@ Pre-preparers broadcasts a \textsc{Prepare} to preparers upon receiving \textsc{
 Preparers broadcast a \textsc{Commit} to committers upon receiving $2f+1$ \textsc{Prepare}s.
 Committers send the command and sequence number to its state machine after receiving $2f+1$ \textsc{Commit}s and the corresponding \textsc{PrePrepare}.
 
-We evaluate \ScalablePBFT{} on 1, 3, and 5 partition configurations, where each partitionable component is partitioned $n$-ways.
-Decoupling contributes to the difference between the 1-partition configuration and \BasePBFT{}; partitioning contributes to the difference between the remaining configurations.
+We evaluate \ScalablePBFT{} on 1, 3, and 5 partition configurations, where each partitionable component is partitioned $n$ ways.
+% Decoupling contributes to the difference between the 1-partition configuration and \BasePBFT{}; partitioning contributes to the difference between the remaining configurations.
 The 3-partition configuration of \ScalablePBFT{}---with 4 leaders, 12 proxy leaders (only 1 leader and its 3 proxy leaders are active), 12 pre-preparers, 12 preparers, and 12 committers---achieves a maximum throughput of 55,000 commands/s, a $5\times$ improvement.
-The additional latency overhead from scaling is negligible.
+The additional latency overhead from scaling is negligible. 
+In our experiments, scaling beyond 5 partitions did not significantly improve throughput.
 
 \david{Future work.}
 In order to validate our results, we aim to evaluate these rewrites on the entirety of PBFT and on more BFT protocols.

@@ -5,7 +5,7 @@
 Byzantine Fault Tolerant (BFT) protocols provide powerful guarantees in the presence of arbitrary machine failures, yet they do not scale.
 % \heidi{I love BFT but this might be overclaiming, bft protocols are mostly used in blockchains. maybe mention that they are powerful or something else.}
 The process of creating new, scalable BFT protocols requires expert analysis and is often error-prone.
-Recent work suggests that localized, rule-driven rewrites can be mechanically applied to scale existing (non-BFT) protocols, including Paxos.
+Recent work suggests that localized, rule-driven rewrites can be mechanically applied to \jmh{correctly} scale existing (non-BFT) protocols, including Paxos.
 We modify these rewrites---decoupling and partitioning---so they can be safely applied to BFT protocols, and apply these rewrites to the critical path of PBFT, improving its throughput by $5\times$.
 We prove the correctness of the modified rewrites on \emph{any} BFT protocol by formally modeling the arbitrary logic of a Byzantine node.
 We define the \randomSimulator{}, a theoretical node that simulates a Byzantine node through randomness, and show that in any BFT protocol, the messages that a \randomSimulator{} can generate before and after optimization is the same.

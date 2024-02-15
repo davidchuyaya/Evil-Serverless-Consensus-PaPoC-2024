@@ -50,16 +50,16 @@ In a later phase, once this replica receives $2f+1$ \textsc{Commit} messages (wh
 
 Because the replica monotonically accumulates sets of \textsc{PrePrepare} and \textsc{Commit} messages through time, the rewrites from \sigmodpaper{} suggest that replicas can be scaled up via monotonic decoupling.
 % \tyler{For a single node,} 
-For each node, the logic that collects \textsc{PrePrepare} messages and the logic that collects \textsc{Commit} messages can be decoupled into two nodes: a pre-preparer and committer.
+For each node, the logic that collects \textsc{PrePrepare} messages and the logic that collects \textsc{Commit} messages can be decoupled into two nodes: a \emph{pre-preparer} and \emph{committer} \jmh{reference Figure 1 here to illustrate. I recommend you change it to Fig 1a and 1b, one each for decoupling and partitioning, so that here you can reference "$l_1$ and $l_2$ of Figure 1a", rather than "$l_1$ and $l_2$ of the middle of Figure 1"?}.
 % \tyler{two nodes, a pre-prepreparer and committer, where the pre-preparer forwards \textsc{PrePrepares} to its own committer, which later compares digests and executes the command.} 
-Crucially, each pre-preparer must forward \textsc{PrePrepare}s to its own committer so it can later compare digests and execute the command.
+Crucially, each pre-preparer \jmh{(e.g. $l_1$)} must forward \textsc{PrePrepare}s to its own committer \jmh{($l_2$)}so it can later compare digests and execute the command.
 The remaining phases of PBFT can be similarly decoupled, as we will discuss in detail in \Cref{sec:eval}.
 
 % \tyler{Intuitively, decoupling logic into two nodes increases the parallelism and therefore the throughput of the system. However,}
 Intuitively, decoupling logic into two nodes reduces load on any one machine and can improve throughput.
 However, in the presence of Byzantine failures, this decoupling would be \emph{unsafe}.
-A single Byzantine node could send two committers doctored \textsc{PrePrepare}s with the same digest but different commands.
-Committers, without checking whether the message was forwarded from their own pre-preparers, will execute the wrong commands, breaking the consensus invariant.
+A single Byzantine node could \jmh{masquerade as two pre-preparers, and} send two committers doctored \textsc{PrePrepare}s with the same digest but different commands.
+Committers, without checking whether the message was forwarded from their own pre-preparers, would then execute the wrong commands, breaking the consensus invariant.
 Because \sigmodpaper{}'s decoupling rewrite was not designed to handle Byzantine attacks, the messages between decoupled nodes are neither signed nor verified, allowing Byzantine nodes to insert their own messages as seen in \Cref{fig:rewrites}.
 
 
@@ -96,10 +96,12 @@ With these guarantees, any Byzantine attacks on the untouched nodes in the rewri
 In order to discuss what messages a Byzantine node can produce, we must formally model \emph{all} possible Byzantine behavior as part of our proof framework.
 This is tricky: Byzantine behavior is, by definition, arbitrary.
 % , with the caveat that one cannot break standard cryptographic primitives.
-To this effect, we make the following observations: (1) a Byzantine node's behavior is a function of its outputs, and (2) the set of all possible Byzantine behaviors is \jmh{eventually executed by nodes that execute random behaviors?} exactly the set of all \emph{random} behaviors.
+To this effect, we make the following observations: (1) a Byzantine node's behavior is a function of its outputs, and (2) the set of all possible Byzantine behaviors is 
+% \jmh{eventually executed by nodes that execute random behaviors?} 
+exactly the set of all \emph{random} behaviors.
 % \tyler{Do you need to emphasize randomness to prove correctness? My worry is that randomness might suggest to a reader that you might empirically evaluate your correctness with e.g. fuzzing as opposed to a formal proof. The proof-of-correctness in section 5 does not seem to require randomness at least to my understanding.}
-We introduce the \emph{\randomSimulator{}}\footnote{Jorge Luis Borges authored \textit{The Library of Babel}, a story about a library of books composed of every possible ordering of characters. By definition, this library contains all books, although it may be hard to find good ones.}, a theoretical gadget that simulates all possible Byzantine behavior in a protocol-agnostic way through randomness.
-At any point in time, the \randomSimulator{} can generate infinitely many random messages to all input channels.
+We introduce the \emph{\randomSimulator{}}\footnote{Jorge Luis Borges' story \textit{The Library of Babel} posits a library of books composed of every possible ordering of characters. By definition, this library contains all books, though it may take arbitrary time to find good ones.}, a theoretical gadget that simulates all possible Byzantine behavior in a protocol-agnostic way through randomness.
+At any point in time, the \randomSimulator{} can generate arbitrarily many random messages to all input channels.
 This theoretical gadget allows us to compare Byzantine behaviors and prove the correctness of the modified rewrites.
 
 % \natacha{The bullet structure is a bit strange -> (3) is the end goal and (2)/(1) are necessary steps to achieve 3. Putting them as the same "level" is confusing. I would rephrase as follows: }

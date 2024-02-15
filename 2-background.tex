@@ -13,14 +13,14 @@ Messages between correct nodes will eventually be delivered.
 Due to limited space, we will instead discuss these rewrites in the context of event-driven pseudocode instead.
 
 \david{What the rewrites are.}
-Rewrites improve protocol throughput by \emph{decoupling} and \emph{partitioning}~\cite{compartmentalized}.
+Rewrites improve protocol throughput by \emph{decoupling} and \emph{partitioning}~\cite{compartmentalized} (Figure~\ref{fig:rewrites}).
 Decoupling splits \emph{logic} on a single node $l$ into two nodes $l_1$ and $l_2$.
 Partitioning splits \emph{data} on a single node $l$ into multiple new nodes $\overline{l} = \{l_1, l_2, \ldots\}$.
 Both rewrites alleviate single-node bottlenecks by introducing pipeline- and data- parallelism, respectively~\cite{autocomp}.
 We say that these new nodes $l_1, l_2, \ldots$ \textbf{correspond} to $l$.
 
 \david{Vulnerability in the rewrites.}
-Naively decoupling and partitioning can make a protocol that was previously fault tolerant vulnerable to Byzantine attacks.
+Used naively, decoupling and partitioning can make a protocol that was previously fault tolerant vulnerable to Byzantine attacks.
 The rewrites can (1) create new nodes and introduce message channels between them, in order to enable pipelining or coordination, and (2) modify existing message channels so messages to a single node must be forwarded to its correct corresponding nodes.
 % \natacha{Remind the reader why that's a problem?}.
 New message channels present exploitable opportunities to Byzantine nodes, which can send arbitrary messages to those channels.
@@ -60,7 +60,7 @@ We treat the signature schemes commonly used by BFT protocols---MACs (Message Au
 Both produce a signature that can be verified with the correct key; this key is symmetric for MACs and asymmetric for public-key signatures.
 
 \david{Make clear which keys are available to which nodes for MACs and public-key signatures.}
-In our formalism, we will store all keys, symmetric or asymmetric, in \texttt{skeys} and \texttt{pkeys}, and sign and verify them with the same syntax.
+In our \jmh{"discussion" rather than "formalism"? it doesn't seem very "formal".} formalism, we will store all keys, symmetric or asymmetric, in \texttt{skeys} and \texttt{pkeys}, and sign and verify them with the same syntax.
 Any symmetric key $k$ used between nodes $l$ and $l'$ is \emph{only} available to those two nodes: $k=$ \texttt{skeys[$l'$]} $=$ \texttt{pkeys[$l'$]} on $l$, and $k=$ \texttt{skeys[$l$]} $=$ \texttt{pkeys[$l$]} on $l'$.
 The availability of asymmetric keys is asymmetric.
 A node $l$ signs all its outgoing messages with $sk$, which is known to no other node, but all nodes know its public key $pk$: for any $l'$, $sk=$ \texttt{skeys[$l'$]} on $l$, and on any $l'$, $pk=$ \texttt{pkeys[$l$]}.
@@ -101,7 +101,7 @@ Assuming that the original distributed protocol is correct in the presence of $f
 \david{Fault domains.}
 We discuss failures in the rewritten protocol in terms of \emph{fault domains}.
 Each node $l$ in the original protocol belongs to its own fault domain; when $l$ is scaled up into its corresponding nodes $\overline{l}$, all nodes in $\overline{l}$ remain in the same fault domain.
-Therefore, the failure of \emph{any} node in $\overline{l}$ is equivalent to the failures of \emph{all} nodes in $\overline{l}$, which is equivalent to the failure $l$, and the rewrites do not change the number of fault domains.
+Therefore, the failure of \emph{any} node in $\overline{l}$ is equivalent \jmh{rather than "is equivalent" shouldn't this be "must appear to an observer to be equivalent"} to the failures of \emph{all} nodes in $\overline{l}$, which is equivalent to the failure $l$, and the rewrites do not change the number of fault domains.
 
 Intuitively, to any observer, the output of all nodes $\overline{l}$ together represents the output of the corresponding original node $l$.
 A ``partially'' Byzantine node is still Byzantine: if any single node $l_i \in \overline{l}$ becomes Byzantine while the remaining corresponding nodes are still correct, it is as if the original node $l$ becomes Byzantine but continues to send \textit{some} correct messages.
