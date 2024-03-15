@@ -9,7 +9,7 @@ Instead of creating new, scalable protocols from scratch, one can break down exi
 protocols into components~\cite{chemistryBehindAgreement} that can be scaled individually~\cite{compartmentalized}.
 
 Gupta et al.~\cite{resilientdb} manually pipelined and partitioned existing BFT protocols, achieving up to $6\times$ throughput improvement.
-\sigmodpaper{}~\cite{autocomp} obtained similar results with simple, local, \emph{program rewrites} for Paxos~\cite{paxosComplex}: \textbf{decoupling} (splitting logic across nodes) and \textbf{partitioning} (splitting data across nodes), as seen in \Cref{fig:rewrites}.
+\sigmodpaper{}~\cite{autocomp,autocompTechReport} obtained similar results with simple, local, \emph{program rewrites} for Paxos~\cite{paxosComplex}: \textbf{decoupling} (splitting logic across nodes) and \textbf{partitioning} (splitting data across nodes), as seen in \Cref{fig:rewrites}.
 Their rewrites are promising because they are protocol-agnostic and rule-driven: given a protocol written in a distributed DSL~\cite{dedalus}, the rewrites can be used to correctly modify any protocol.
 However, these rewrites were proven correct assuming non-Byzantine failures only.
 

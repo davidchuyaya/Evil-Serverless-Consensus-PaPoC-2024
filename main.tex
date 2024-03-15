@@ -8,13 +8,28 @@
 % When using Usenix, choose this: 
 % \documentclass[letterpaper,twocolumn,10pt]{article}
 % When using ACM, choose this
-\documentclass[sigplan,review]{acmart}
-\renewcommand\footnotetextcopyrightpermission[1]{}
+% Copied from PaPoC
+\documentclass[sigplan,10pt]{acmart}
+% \renewcommand\footnotetextcopyrightpermission[1]{} 
 \settopmatter{printfolios=true,printacmref=false}
+% End copied from PaPoC
+
+% Remove page numbers
+\pagenumbering{gobble}
 
 \usepackage{preamble}
 
 \begin{document}
+
+% Copied from PaPoC
+\acmYear{2024}\copyrightyear{2024}
+\setcopyright{rightsretained}
+\acmConference[PaPoC '24]{Principles and Practice of Consistency for Distributed Data}{April 22, 2024}{Athens, Greece}
+\acmBooktitle{Principles and Practice of Consistency for Distributed Data (PaPoC '24), April 22, 2024, Athens, Greece}
+\acmDOI{10.1145/3642976.3653033}
+\acmISBN{979-8-4007-0544-1/24/04}
+% End copied from PaPoC
+
 \title{Bigger, not Badder: Safely Scaling BFT Protocols}
 
 \author{David C. Y. Chu, Chris Liu, Natacha Crooks, Joseph M. Hellerstein, Heidi Howard$^\dagger$}
